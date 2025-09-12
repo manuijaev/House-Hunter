@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   MapPin,
-  Star,
   MessageCircle,
   CreditCard,
   Home,
@@ -25,15 +24,6 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
     setCurrentImageIndex((prev) => (prev - 1 + house.images.length) % house.images.length);
   };
 
-  const renderStars = (rating) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        size={16}
-        className={i < rating ? 'star filled' : 'star'}
-      />
-    ));
-  };
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-KE', {
@@ -71,12 +61,6 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
           <div className="occupied-badge">Occupied</div>
         )}
         <div className="image-overlay">
-          {userType !== 'landlord' && (
-            <div className="rating">
-              {renderStars(house.rating || 0)}
-              <span>({house.reviewCount || 0})</span>
-            </div>
-          )}
         </div>
       </div>
 

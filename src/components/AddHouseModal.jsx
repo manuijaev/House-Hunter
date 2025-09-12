@@ -37,25 +37,64 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
 
   const handleImageUpload = async (files) => {
     const imageFiles = Array.from(files);
+
+    // Validate file sizes before upload
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const oversizedFiles = imageFiles.filter(file => file.size > maxSize);
+
+    if (oversizedFiles.length > 0) {
+      toast.error(`Some files are too large. Maximum file size is ${maxSize / (1024 * 1024)}MB`);
+      return;
+    }
+
+    // Check total number of images
+    if (formData.images.length + imageFiles.length > 10) {
+      toast.error('Maximum 10 images allowed per property');
+      return;
+    }
+
     setUploading(true);
     setUploadingImages(imageFiles.map(() => true));
 
     try {
       const uploadPromises = imageFiles.map(async (file, index) => {
-        const imageData = await saveImageToLocalStorage(file);
+        console.log(`Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
+        const startTime = Date.now();
+
+        const imageData = await saveImageToLocalStorage(file, 45000); // 45 second timeout
+
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+        console.log(`✅ ${file.name} uploaded in ${duration.toFixed(2)}s`);
+
         setUploadingImages(prev => prev.map((uploading, i) => i === index ? false : uploading));
         return imageData;
       });
 
       const uploadedImages = await Promise.all(uploadPromises);
+
+      // Log compression info
+      uploadedImages.forEach(img => {
+        if (img.compressed) {
+          const savings = ((img.originalSize - img.compressedSize) / img.originalSize * 100).toFixed(1);
+          console.log(`🗜️ ${img.name} compressed: ${savings}% size reduction`);
+        }
+      });
+
       setFormData({
         ...formData,
         images: [...formData.images, ...uploadedImages]
       });
-      
-      toast.success('Images saved successfully!');
+
+      const compressedCount = uploadedImages.filter(img => img.compressed).length;
+      if (compressedCount > 0) {
+        toast.success(`${uploadedImages.length} images saved! ${compressedCount} were compressed for better performance.`);
+      } else {
+        toast.success(`${uploadedImages.length} images saved successfully!`);
+      }
     } catch (error) {
-      toast.error('Error saving images: ' + error.message);
+      console.error('Upload error:', error);
+      toast.error('Upload failed: ' + error.message);
     } finally {
       setUploading(false);
       setUploadingImages([]);
@@ -214,7 +253,8 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
               <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
                 <Camera size={40} />
                 <p>Click to upload images</p>
-                <p className="upload-hint">Upload multiple images (max 10)</p>
+                <p className="upload-hint">Upload multiple images (max 10, up to 10MB each)</p>
+                <p className="upload-subhint">Large images will be automatically compressed</p>
               </div>
               <input
                 ref={fileInputRef}
@@ -230,6 +270,9 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
               <div className="uploading-indicator">
                 <div className="spinner"></div>
                 <p>Uploading images...</p>
+                <p className="upload-progress">
+                  {uploadingImages.filter(uploading => !uploading).length} of {uploadingImages.length} completed
+                </p>
               </div>
             )}
 

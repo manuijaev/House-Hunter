@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  collection, 
-  query, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
+import {
+  collection,
+  query,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   doc,
-  where 
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
+import { clearAllImagesFromLocalStorage } from '../utils/LocalStorage';
 import {
   Plus,
   LogOut,
@@ -18,7 +19,10 @@ import {
   Home,
   BarChart3,
   Moon,
-  Sun
+  Sun,
+  ChevronDown,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
@@ -32,6 +36,7 @@ function LandlordDashboard() {
   const [editingHouse, setEditingHouse] = useState(null);
   const [activeTab, setActiveTab] = useState('houses');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -74,9 +79,7 @@ function LandlordDashboard() {
         landlordId: currentUser.uid,
         landlordName: currentUser.displayName || 'Landlord',
         createdAt: new Date().toISOString(),
-        isVacant: true,
-        rating: 0,
-        reviewCount: 0
+        isVacant: true
       };
 
       await addDoc(collection(db, 'houses'), houseWithLandlord);
@@ -114,6 +117,57 @@ function LandlordDashboard() {
     } catch (error) {
       console.error('Logout error:', error);
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone and will remove all your houses and data.')) {
+      try {
+        // Delete all houses owned by this landlord
+        const housesToDelete = houses.map(house => deleteDoc(doc(db, 'houses', house.id)));
+        await Promise.all(housesToDelete);
+
+        // Delete user document from Firestore if it exists
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        try {
+          await deleteDoc(userDocRef);
+        } catch (error) {
+          // User document might not exist, continue
+          console.log('User document not found or already deleted');
+        }
+
+        // Delete user from Firebase Auth
+        await currentUser.delete();
+
+        toast.success('Account and all associated data deleted successfully');
+        // Redirect will happen automatically due to auth state change
+      } catch (error) {
+        console.error('Delete account error:', error);
+        toast.error('Failed to delete account: ' + error.message);
+      }
+    }
+    setShowDropdown(false);
+  };
+
+  const handleResetImages = async () => {
+    if (window.confirm('Are you sure you want to reset everything? This will delete all your houses, images, and data from the database. This action cannot be undone.')) {
+      try {
+        // Delete all houses owned by this landlord from Firestore
+        const housesToDelete = houses.map(house => deleteDoc(doc(db, 'houses', house.id)));
+        await Promise.all(housesToDelete);
+
+        // Clear all images from local storage
+        clearAllImagesFromLocalStorage();
+
+        // Update local state to reflect changes
+        setHouses([]);
+
+        toast.success('All houses and images have been deleted successfully');
+      } catch (error) {
+        console.error('Reset error:', error);
+        toast.error('Failed to reset data: ' + error.message);
+      }
+    }
+    setShowDropdown(false);
   };
 
   const toggleVacancy = async (houseId, isVacant) => {
@@ -161,10 +215,31 @@ function LandlordDashboard() {
                 Back to My Houses
               </button>
             )}
-            <button onClick={handleLogout} className="logout-btn">
-              <LogOut size={20} />
-              Logout
-            </button>
+            <div className="dropdown-container">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="dropdown-btn"
+              >
+                <ChevronDown size={20} />
+                Menu
+              </button>
+              {showDropdown && (
+                <div className="dropdown-menu">
+                  <button onClick={handleLogout} className="dropdown-item">
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                  <button onClick={handleResetImages} className="dropdown-item reset">
+                    <RotateCcw size={16} />
+                    Reset All Data
+                  </button>
+                  <button onClick={handleDeleteAccount} className="dropdown-item delete">
+                    <Trash2 size={16} />
+                    Delete Account
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
