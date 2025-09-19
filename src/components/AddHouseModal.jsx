@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, 
   Upload, 
@@ -23,9 +23,28 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
     contactEmail: house?.contactEmail || '',
     images: house?.images || []
   });
+
   const [uploading, setUploading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState([]);
   const fileInputRef = useRef(null);
+
+  // Reset form when modal opens/closes or house prop changes
+  useEffect(() => {
+    console.log('useEffect triggered, house prop:', house);
+    const newFormData = {
+      title: house?.title || '',
+      description: house?.description || '',
+      location: house?.location || '',
+      monthlyRent: house?.monthlyRent || '',
+      deposit: house?.deposit || '',
+      availableDate: house?.availableDate || '',
+      contactPhone: house?.contactPhone || '',
+      contactEmail: house?.contactEmail || '',
+      images: house?.images || []
+    };
+    console.log('Setting form data to:', newFormData);
+    setFormData(newFormData);
+  }, [house]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -38,14 +57,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
   const handleImageUpload = async (files) => {
     const imageFiles = Array.from(files);
 
-    // Validate file sizes before upload
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const oversizedFiles = imageFiles.filter(file => file.size > maxSize);
-
-    if (oversizedFiles.length > 0) {
-      toast.error(`Some files are too large. Maximum file size is ${maxSize / (1024 * 1024)}MB`);
-      return;
-    }
+    // No file size validation - allow any image size
 
     // Check total number of images
     if (formData.images.length + imageFiles.length > 10) {
@@ -72,26 +84,19 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       });
 
       const uploadedImages = await Promise.all(uploadPromises);
+      console.log('Uploaded images:', uploadedImages);
 
-      // Log compression info
-      uploadedImages.forEach(img => {
-        if (img.compressed) {
-          const savings = ((img.originalSize - img.compressedSize) / img.originalSize * 100).toFixed(1);
-          console.log(`${img.name} compressed: ${savings}% size reduction`);
-        }
-      });
+      // No compression - images are stored as-is
+
+      const newImages = [...formData.images, ...uploadedImages];
+      console.log('New form images array:', newImages);
 
       setFormData({
         ...formData,
-        images: [...formData.images, ...uploadedImages]
+        images: newImages
       });
 
-      const compressedCount = uploadedImages.filter(img => img.compressed).length;
-      if (compressedCount > 0) {
-        toast.success(`${uploadedImages.length} images saved! ${compressedCount} were compressed for better performance.`);
-      } else {
-        toast.success(`${uploadedImages.length} images saved successfully!`);
-      }
+      toast.success(`${uploadedImages.length} images saved successfully!`);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Upload failed: ' + error.message);
@@ -106,28 +111,74 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
     if (imageToRemove && imageToRemove.id) {
       removeImageFromLocalStorage(imageToRemove.id);
     }
-    
+
     setFormData({
       ...formData,
       images: formData.images.filter((_, i) => i !== index)
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log('Form submission started');
+    console.log('Form data:', formData);
+
     if (formData.images.length === 0) {
+      console.log('No images uploaded');
       toast.error('Please upload at least one image');
       return;
     }
 
-    const houseData = {
-      ...formData,
-      monthlyRent: Number(formData.monthlyRent),
-      deposit: Number(formData.deposit)
-    };
+    // Validate required fields
+    if (!formData.title.trim() || !formData.description.trim() || !formData.location.trim()) {
+      console.log('Missing required fields');
+      toast.error('Please fill in all required fields');
+      return;
+    }
 
-    onSave(houseData);
+    if (!formData.contactPhone.trim() || !formData.contactEmail.trim()) {
+      console.log('Missing contact information');
+      toast.error('Please provide contact information');
+      return;
+    }
+
+    if (!formData.monthlyRent || !formData.deposit) {
+      console.log('Missing pricing information');
+      toast.error('Please provide pricing information');
+      return;
+    }
+
+    try {
+      const houseData = {
+        ...formData,
+        monthlyRent: Number(formData.monthlyRent),
+        deposit: Number(formData.deposit)
+      };
+
+      console.log('Calling onSave with data:', houseData);
+      await onSave(houseData);
+      console.log('onSave completed successfully');
+
+      // Reset form on successful save
+      setFormData({
+        title: '',
+        description: '',
+        location: '',
+        monthlyRent: '',
+        deposit: '',
+        availableDate: '',
+        contactPhone: '',
+        contactEmail: '',
+        images: []
+      });
+
+      console.log('Form reset completed');
+
+    } catch (error) {
+      console.error('Error saving house:', error);
+      toast.error('Failed to save house. Please try again.');
+    }
   };
 
   return (
@@ -253,17 +304,19 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
               <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
                 <Camera size={40} />
                 <p>Click to upload images</p>
-                <p className="upload-hint">Upload multiple images (max 10, up to 10MB each)</p>
-                <p className="upload-subhint">Large images will be automatically compressed</p>
+                <p className="upload-hint">Upload multiple images (max 10, any size)</p>
+                <p className="upload-subhint">Camera or gallery - any image size</p>
               </div>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
                 accept="image/*"
+                capture="environment"
                 onChange={(e) => handleImageUpload(e.target.files)}
                 style={{ display: 'none' }}
               />
+
             </div>
 
             {uploading && (

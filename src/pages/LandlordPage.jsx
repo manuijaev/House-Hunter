@@ -74,6 +74,9 @@ function LandlordDashboard() {
 
   const handleAddHouse = async (houseData) => {
     try {
+      console.log('handleAddHouse called with data:', houseData);
+      console.log('Current user:', currentUser);
+
       const houseWithLandlord = {
         ...houseData,
         landlordId: currentUser.uid,
@@ -82,10 +85,14 @@ function LandlordDashboard() {
         isVacant: true
       };
 
+      console.log('House data to save:', houseWithLandlord);
       await addDoc(collection(db, 'houses'), houseWithLandlord);
+      console.log('House saved to Firestore successfully');
+
       toast.success('House added successfully!');
       setShowAddModal(false);
     } catch (error) {
+      console.error('Error adding house:', error);
       toast.error('Error adding house: ' + error.message);
     }
   };

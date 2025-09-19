@@ -2,12 +2,7 @@
 
 export const saveImageToLocalStorage = (file, timeout = 30000) => {
   return new Promise((resolve, reject) => {
-    // Check file size (allow up to 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      reject(new Error(`File size too large. Maximum allowed size is ${maxSize / (1024 * 1024)}MB`));
-      return;
-    }
+    // No file size limit - allow any image size
 
     const reader = new FileReader();
 
@@ -20,69 +15,33 @@ export const saveImageToLocalStorage = (file, timeout = 30000) => {
     reader.onload = (e) => {
       clearTimeout(timeoutId);
 
-      // Compress image if it's very large (>5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        compressImage(e.target.result, file.type).then(compressedData => {
-          const imageData = {
-            id: Date.now() + Math.random().toString(36).substr(2, 9),
-            data: compressedData,
-            name: file.name,
-            size: compressedData.length,
-            originalSize: file.size,
-            type: file.type,
-            timestamp: new Date().toISOString(),
-            compressed: true
-          };
+      const imageData = {
+        id: Date.now() + Math.random().toString(36).substr(2, 9),
+        data: e.target.result,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        timestamp: new Date().toISOString(),
+        compressed: false
+      };
 
-          try {
-            const key = `house_image_${imageData.id}`;
-            localStorage.setItem(key, JSON.stringify(imageData));
+      try {
+        const key = `house_image_${imageData.id}`;
+        localStorage.setItem(key, JSON.stringify(imageData));
 
-            resolve({
-              id: imageData.id,
-              url: compressedData,
-              name: file.name,
-              compressed: true,
-              originalSize: file.size,
-              compressedSize: compressedData.length
-            });
-          } catch (storageError) {
-            if (storageError.name === 'QuotaExceededError') {
-              reject(new Error('Storage quota exceeded. Please clear some images or use a different browser.'));
-            } else {
-              reject(new Error('Failed to save image to storage. Storage might be full or unavailable.'));
-            }
-          }
-        }).catch(compressError => {
-          reject(new Error('Failed to compress image: ' + compressError.message));
-        });
-      } else {
-        const imageData = {
-          id: Date.now() + Math.random().toString(36).substr(2, 9),
-          data: e.target.result,
+        resolve({
+          id: imageData.id,
+          url: e.target.result,
           name: file.name,
-          size: file.size,
-          type: file.type,
-          timestamp: new Date().toISOString(),
           compressed: false
-        };
-
-        try {
-          const key = `house_image_${imageData.id}`;
-          localStorage.setItem(key, JSON.stringify(imageData));
-
-          resolve({
-            id: imageData.id,
-            url: e.target.result,
-            name: file.name,
-            compressed: false
-          });
-        } catch (storageError) {
-          if (storageError.name === 'QuotaExceededError') {
-            reject(new Error('Storage quota exceeded. Please clear some images or use a different browser.'));
-          } else {
-            reject(new Error('Failed to save image to storage. Storage might be full or unavailable.'));
-          }
+        });
+      } catch (storageError) {
+        if (storageError.name === 'QuotaExceededError') {
+          reject(new Error('Storage quota exceeded. Please clear some images or use a different browser.'));
+        } else if (storageError.name === 'SecurityError') {
+          reject(new Error('Browser security is blocking storage access. Please try a different browser or run the app on a local server.'));
+        } else {
+          reject(new Error('Failed to save image to storage. Storage might be full or unavailable.'));
         }
       }
     };
@@ -102,51 +61,7 @@ export const saveImageToLocalStorage = (file, timeout = 30000) => {
   });
 };
 
-// Helper function to compress images
-const compressImage = (dataUrl, type) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      // Calculate new dimensions (max 1920px width/height)
-      let { width, height } = img;
-      const maxDimension = 1920;
-
-      if (width > height) {
-        if (width > maxDimension) {
-          height = (height * maxDimension) / width;
-          width = maxDimension;
-        }
-      } else {
-        if (height > maxDimension) {
-          width = (width * maxDimension) / height;
-          height = maxDimension;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw and compress
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Compress based on file type
-      let quality = 0.8;
-      if (type === 'image/jpeg' || type === 'image/jpg') {
-        quality = 0.7;
-      } else if (type === 'image/png') {
-        quality = 0.8;
-      }
-
-      canvas.toBlob(resolve, type, quality);
-    };
-
-    img.onerror = () => reject(new Error('Failed to load image for compression'));
-    img.src = dataUrl;
-  });
-};
+// Image compression function removed - no size limits
 
 export const getImageFromLocalStorage = (imageId) => {
   const key = `house_image_${imageId}`;
