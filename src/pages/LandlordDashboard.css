@@ -1,4 +1,4 @@
-.landlord-dashboard {
+i.landlord-dashboard {
   min-height: 100vh;
   background: #f8f9fa;
 }
@@ -235,6 +235,24 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+.location-badge {
+  position: absolute;
+  top: 3.5rem;
+  left: 1rem;
+  background: linear-gradient(135deg, #3498db, #5dade2);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+
 .no-recommendations {
   text-align: center;
   padding: 3rem;
@@ -276,6 +294,89 @@
 
 .landlord-dashboard.dark .no-recommendations h3 {
   color: #ffffff;
+}
+
+.landlord-dashboard.dark .location-badge {
+  background: linear-gradient(135deg, #2980b9, #3498db);
+}
+
+/* AI Recommendations Section */
+.ai-recommendations-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.ai-recommendations-section .section-header {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ai-recommendations-section .header-info h2 {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ai-recommendations-section .header-info p {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.ai-preferences {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.ai-preferences span {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  backdrop-filter: blur(5px);
+}
+
+
+.ai-recommended {
+  position: relative;
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+.ai-recommendation-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  border: 2px solid white;
+}
+
+.ai-recommended .house-card {
+  border: 2px solid #667eea;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+}
+
+/* Dark mode adjustments */
+.landlord-dashboard.dark .ai-recommendations-section {
+  background: linear-gradient(135deg, #4c5fd5 0%, #6b46c1 100%);
 }
 
 .ai-loading {
@@ -373,10 +474,59 @@
   color: white;
 }
 
+.chatbot-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chatbot-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.clear-recommendations-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.clear-recommendations-btn:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
 .dashboard-content {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
+}
+
+/* Hide scrollbar on dashboard */
+.dashboard-content::-webkit-scrollbar {
+  display: none;
+}
+
+.dashboard-content {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 .search-section {
@@ -465,7 +615,7 @@
   border-bottom: 1px solid #e1e5e9;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .header-info h2 {
@@ -544,8 +694,73 @@
   padding: 1.5rem;
 }
 
+/* Hide scrollbar on houses grid */
+.houses-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.houses-grid {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Hide scrollbar on entire page/body for tenant dashboard */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+html, body {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Hide scrollbar on main container */
+.landlord-dashboard::-webkit-scrollbar {
+  display: none;
+}
+
+.landlord-dashboard {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 .house-card-container {
   position: relative;
+}
+
+.house-card-container.highlighted {
+  animation: highlightPulse 2s ease-in-out;
+}
+
+.recommendation-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+  border: 2px solid white;
+}
+
+@keyframes highlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 107, 53, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0);
+  }
 }
 
 .no-houses {
@@ -648,6 +863,7 @@
     gap: 1rem;
     align-items: stretch;
   }
+
   
   .houses-grid {
     grid-template-columns: 1fr;
@@ -764,6 +980,58 @@
   color: #ffffff;
 }
 
+/* Highlighted house styles */
+.house-card-container.highlighted {
+  position: relative;
+  animation: highlightPulse 2s ease-in-out;
+  border: 2px solid #28a745 !important;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(40, 167, 69, 0.3) !important;
+}
+
+@keyframes highlightPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.recommendation-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  border: 2px solid white;
+}
+
+.recommendation-badge svg {
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+/* Enhanced header for AI recommendations */
+.header-info h2 {
+  transition: color 0.3s ease;
+}
+
+.landlord-dashboard .header-info h2:has-text("AI Recommended Properties") {
+  color: #28a745;
+  font-weight: 700;
+}
+
 .landlord-dashboard.dark .theme-btn {
   background: #2d2d2d;
   color: #667eea;
@@ -773,6 +1041,23 @@
 .landlord-dashboard.dark .theme-btn:hover {
   background: #667eea;
   color: white;
+}
+
+.landlord-dashboard.dark .chatbot-btn {
+  background: #28a745;
+  color: white;
+}
+
+.landlord-dashboard.dark .chatbot-btn:hover {
+  background: #218838;
+}
+
+.landlord-dashboard.dark .clear-recommendations-btn {
+  background: #dc3545;
+}
+
+.landlord-dashboard.dark .clear-recommendations-btn:hover {
+  background: #c82333;
 }
 
 .landlord-dashboard.dark .logout-btn {

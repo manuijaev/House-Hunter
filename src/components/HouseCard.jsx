@@ -6,8 +6,8 @@ import {
   Home,
   User,
   Calendar,
-  ChevronLeft,
-  ChevronRight,
+  ArrowLeft,
+  ArrowRight,
   Phone,
   Mail
 } from 'lucide-react';
@@ -41,10 +41,10 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
             {house.images.length > 1 && (
               <>
                 <button className="image-nav-btn prev-btn" onClick={prevImage}>
-                  <ChevronLeft size={20} />
+                  <ArrowLeft size={35} />
                 </button>
                 <button className="image-nav-btn next-btn" onClick={nextImage}>
-                  <ChevronRight size={20} />
+                  <ArrowRight size={35} />
                 </button>
                 <div className="image-counter">
                   {currentImageIndex + 1} / {house.images.length}

@@ -65,7 +65,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
 
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
-        console.log(`✅ ${file.name} uploaded in ${duration.toFixed(2)}s`);
+        console.log(`${file.name} uploaded in ${duration.toFixed(2)}s`);
 
         setUploadingImages(prev => prev.map((uploading, i) => i === index ? false : uploading));
         return imageData;
@@ -77,7 +77,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       uploadedImages.forEach(img => {
         if (img.compressed) {
           const savings = ((img.originalSize - img.compressedSize) / img.originalSize * 100).toFixed(1);
-          console.log(`🗜️ ${img.name} compressed: ${savings}% size reduction`);
+          console.log(`${img.name} compressed: ${savings}% size reduction`);
         }
       });
 
@@ -115,7 +115,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (formData.images.length === 0) {
       toast.error('Please upload at least one image');
       return;

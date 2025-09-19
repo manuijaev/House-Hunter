@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Toaster } from 'react-hot-toast';
 import LoginPage from './pages/LoginPage';
 import TenantPage from './pages/TenantPage';
 import LandlordPage from './pages/LandlordPage';
@@ -23,12 +24,12 @@ function AppRoutes() {
     );
   }
 
- 
+
   if (!userType) {
     return <div className="loading">Loading user type...</div>;
   }
 
- 
+
   return (
     <Routes>
       <Route
@@ -58,6 +59,16 @@ function App() {
     <AuthProvider>
       <Router>
         <AppRoutes />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 2000,
+            style: {
+              background: '#333',
+              color: '#fff',
+            },
+          }}
+        />
       </Router>
     </AuthProvider>
   );

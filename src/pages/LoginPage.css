@@ -7,14 +7,8 @@
   top: 0;
   left: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  opacity: 0;
-  animation: fadeIn 4s forwards;
+  opacity: 1;
   overflow: hidden;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 
 .hero-section {
@@ -25,13 +19,8 @@
   padding: 2rem;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
   color: white;
-  animation: shimmer 8s ease-in-out backwards;
-  min-height: 100vh;
 }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
+
 
 .hero-content {
   text-align: center;
@@ -90,6 +79,11 @@
 .auth-header {
   text-align: center;
   margin-bottom: 2rem;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding-top: 1rem;
 }
 
 .auth-header h2 {
@@ -161,7 +155,7 @@
 
 .form-group input {
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  padding: 0.75rem 3rem 0.75rem 2.5rem;
   border: 2px solid #e1e5e9;
   border-radius: 8px;
   font-size: 1rem;
@@ -174,6 +168,25 @@
   border-color: #667eea;
   background: white;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  z-index: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+}
+
+.password-toggle:hover {
+  color: #667eea;
 }
 
 .auth-btn {
@@ -222,6 +235,24 @@
 
 .toggle-btn:hover {
   color: #764ba2;
+}
+
+.error-message {
+  color: red;
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.form-group input.error {
+  border-color: red !important;
+}
+
+.field-error {
+  color: red;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  display: block;
 }
 
 @media (max-width: 768px) {

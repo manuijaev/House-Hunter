@@ -28,14 +28,18 @@ export const AuthProvider = ({ children }) => {
       console.log('User created successfully:', user.uid);
       
       // Save user type and additional data to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
-        userType: userType,
-        ...userData,
-        createdAt: new Date().toISOString()
-      });
-      
-      console.log('User data saved to Firestore');
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email,
+          userType: userType,
+          ...userData,
+          createdAt: new Date().toISOString()
+        });
+        console.log('User data saved to Firestore');
+      } catch (firestoreError) {
+        console.error('Failed to save user data to Firestore:', firestoreError);
+        // Continue with registration even if Firestore save fails
+      }
       return userCredential;
     } catch (error) {
       console.error('Signup error:', error);

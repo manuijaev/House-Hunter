@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   Search,
   LogOut,
+  MessageCircle,
   Home,
   Moon,
   Sun,
@@ -24,10 +25,12 @@ import {
   RotateCcw,
   Sparkles,
   TrendingDown,
-  Star
+  Star,
+  X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
+import Chatbot from '../components/Chatbot';
 import '../pages/LandlordDashboard.css';
 
 function TenantPage() {
@@ -41,6 +44,9 @@ function TenantPage() {
   const [tenantLocation, setTenantLocation] = useState('');
   const [aiRecommendations, setAiRecommendations] = useState([]);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [chatbotRecommendations, setChatbotRecommendations] = useState([]);
+  const [chatbotPreferences, setChatbotPreferences] = useState(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -50,19 +56,11 @@ function TenantPage() {
       where('isVacant', '==', true)
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      let housesData = snapshot.docs.map(doc => ({
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const housesData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-
-      // If no houses exist, create sample houses for demo
-      if (housesData.length === 0) {
-        console.log('No houses found, creating sample houses...');
-        await createSampleHouses();
-        // The snapshot will trigger again with new data
-        return;
-      }
 
       console.log('Loaded houses:', housesData.length);
       setHouses(housesData);
@@ -74,117 +72,6 @@ function TenantPage() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Function to create sample houses for demo purposes
-  const createSampleHouses = async () => {
-    const sampleHouses = [
-      {
-        title: 'Modern 2BR Apartment',
-        description: 'Beautiful modern apartment with great amenities',
-        location: 'Westlands, Nairobi',
-        monthlyRent: 45000,
-        deposit: 45000,
-        availableDate: '2024-02-01',
-        contactPhone: '+254712345678',
-        contactEmail: 'landlord1@example.com',
-        landlordName: 'John Doe',
-        landlordId: 'sample1',
-        isVacant: true,
-        rating: 4.5,
-        reviewCount: 12,
-        images: [
-          { id: '1', url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400', name: 'living-room.jpg' },
-          { id: '2', url: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400', name: 'bedroom.jpg' }
-        ],
-        createdAt: new Date().toISOString()
-      },
-      {
-        title: 'Cozy Studio Apartment',
-        description: 'Perfect for singles or couples',
-        location: 'Kilimani, Nairobi',
-        monthlyRent: 25000,
-        deposit: 25000,
-        availableDate: '2024-01-15',
-        contactPhone: '+254723456789',
-        contactEmail: 'landlord2@example.com',
-        landlordName: 'Jane Smith',
-        landlordId: 'sample2',
-        isVacant: true,
-        rating: 4.2,
-        reviewCount: 8,
-        images: [
-          { id: '3', url: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400', name: 'studio.jpg' }
-        ],
-        createdAt: new Date().toISOString()
-      },
-      {
-        title: 'Luxury 3BR Townhouse',
-        description: 'Spacious family home with garden',
-        location: 'Karen, Nairobi',
-        monthlyRent: 120000,
-        deposit: 120000,
-        availableDate: '2024-03-01',
-        contactPhone: '+254734567890',
-        contactEmail: 'landlord3@example.com',
-        landlordName: 'Mike Johnson',
-        landlordId: 'sample3',
-        isVacant: true,
-        rating: 4.8,
-        reviewCount: 25,
-        images: [
-          { id: '4', url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400', name: 'townhouse.jpg' },
-          { id: '5', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400', name: 'garden.jpg' }
-        ],
-        createdAt: new Date().toISOString()
-      },
-      {
-        title: 'Budget 1BR Apartment',
-        description: 'Affordable housing option',
-        location: 'Westlands, Nairobi',
-        monthlyRent: 20000,
-        deposit: 20000,
-        availableDate: '2024-01-20',
-        contactPhone: '+254745678901',
-        contactEmail: 'landlord4@example.com',
-        landlordName: 'Sarah Wilson',
-        landlordId: 'sample4',
-        isVacant: true,
-        rating: 3.9,
-        reviewCount: 15,
-        images: [
-          { id: '6', url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400', name: 'budget-apartment.jpg' }
-        ],
-        createdAt: new Date().toISOString()
-      },
-      {
-        title: 'Executive 2BR Penthouse',
-        description: 'Luxury penthouse with city views',
-        location: 'Parklands, Nairobi',
-        monthlyRent: 85000,
-        deposit: 85000,
-        availableDate: '2024-02-15',
-        contactPhone: '+254756789012',
-        contactEmail: 'landlord5@example.com',
-        landlordName: 'David Brown',
-        landlordId: 'sample5',
-        isVacant: true,
-        rating: 4.7,
-        reviewCount: 18,
-        images: [
-          { id: '7', url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400', name: 'penthouse.jpg' }
-        ],
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    try {
-      for (const house of sampleHouses) {
-        await addDoc(collection(db, 'houses'), house);
-      }
-      console.log('Sample houses created successfully');
-    } catch (error) {
-      console.error('Error creating sample houses:', error);
-    }
-  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -194,22 +81,67 @@ function TenantPage() {
   }, []);
 
   useEffect(() => {
-    if (searchLocation.trim() === '') {
-      setFilteredHouses(houses);
-    } else {
-      const filtered = houses.filter(house =>
+    let housesToDisplay = houses;
+
+  
+    if (searchLocation.trim() !== '') {
+      housesToDisplay = houses.filter(house =>
         house.location.toLowerCase().includes(searchLocation.toLowerCase())
       );
-      setFilteredHouses(filtered);
     }
-  }, [searchLocation, houses]);
 
-  // Fetch tenant location from user profile
+    if (chatbotRecommendations.length > 0) {
+      housesToDisplay = housesToDisplay.sort((a, b) => {
+        const aIsRecommended = chatbotRecommendations.some(rec => rec.id === a.id);
+        const bIsRecommended = chatbotRecommendations.some(rec => rec.id === b.id);
+
+        if (aIsRecommended && !bIsRecommended) return -1;
+        if (!aIsRecommended && bIsRecommended) return 1;
+        return 0;
+      });
+    }
+
+    setFilteredHouses(housesToDisplay);
+  }, [searchLocation, houses, chatbotRecommendations]);
+
+  
+  useEffect(() => {
+    const savedRecommendations = localStorage.getItem('ai_recommendations');
+    if (savedRecommendations) {
+      try {
+        const data = JSON.parse(savedRecommendations);
+        setAiRecommendations(data.houses || []);
+      } catch (error) {
+        console.error('Error loading AI recommendations:', error);
+      }
+    }
+  }, []);
+
+ 
+  useEffect(() => {
+    const savedChatbotRecommendations = localStorage.getItem('chatbot_recommendations');
+    if (savedChatbotRecommendations) {
+      try {
+        const data = JSON.parse(savedChatbotRecommendations);
+        setChatbotRecommendations(data.houses || []);
+        setChatbotPreferences(data.preferences || null);
+      } catch (error) {
+        console.error('Error loading chatbot recommendations:', error);
+      }
+    }
+  }, []);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
+
+
+  
   useEffect(() => {
     const fetchTenantLocation = async () => {
       if (currentUser) {
         try {
-          // Try to get location from user document in Firestore
+          
           const userDocRef = doc(db, 'users', currentUser.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -243,106 +175,88 @@ function TenantPage() {
   useEffect(() => {
     if (houses.length > 0) {
       setIsLoadingAI(true);
-      const generateRecommendations = async () => {
-        console.log('🤖 Generating AI recommendations...');
-        console.log('📊 Total houses:', houses.length);
-        console.log('📍 Tenant location:', tenantLocation);
+      const generateRecommendations = () => {
+        console.log('Generating AI recommendations...');
+        console.log('Total houses:', houses.length);
+        console.log('Tenant location:', tenantLocation);
 
-        // Simulate AI processing time for better UX
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        let locationHouses = houses;
-
-        // If tenant has a location, filter by location
-        if (tenantLocation) {
-          locationHouses = houses.filter(house =>
-            house.location && (
-              house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
-              tenantLocation.toLowerCase().includes(house.location.toLowerCase())
-            )
-          );
-          console.log('🏠 Houses in location:', locationHouses.length);
-        }
-
-        // If no houses in specific location or no location set, use all houses
-        if (locationHouses.length === 0) {
-          locationHouses = houses;
-          console.log('🔄 Using all houses as fallback');
-        }
-
-        // Calculate average price
-        const avgPrice = locationHouses.reduce((sum, house) => sum + (house.monthlyRent || 0), 0) / locationHouses.length;
-        console.log('💰 Average price:', avgPrice);
-
-        // Find cheaper houses (below average price) or just sort by price if all are expensive
-        let cheaperHouses = locationHouses.filter(house => (house.monthlyRent || 0) < avgPrice);
-
-        // If no houses are below average, take the cheapest ones
-        if (cheaperHouses.length === 0) {
-          cheaperHouses = locationHouses
-            .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
-            .slice(0, 5);
-        } else {
-          cheaperHouses = cheaperHouses
-            .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
-            .slice(0, 5);
-        }
-
-        console.log('💡 Cheaper houses found:', cheaperHouses.length);
-
-        // Add AI scoring based on various factors
-        const recommendationsWithScore = cheaperHouses.map(house => {
-          let score = 100;
-
-          // Price factor (cheaper = higher score)
-          const priceRatio = (house.monthlyRent || avgPrice) / avgPrice;
-          score -= Math.min(priceRatio * 30, 40); // Cap the penalty
-
-          // Rating factor
-          if (house.rating) {
-            score += (house.rating / 5) * 20;
-          }
-
-          // Recent availability factor
-          if (house.availableDate) {
-            try {
-              const availableDate = new Date(house.availableDate);
-              const now = new Date();
-              const daysUntilAvailable = Math.ceil((availableDate - now) / (1000 * 60 * 60 * 24));
-              if (daysUntilAvailable <= 30 && daysUntilAvailable >= 0) {
-                score += 15;
-              }
-            } catch (error) {
-              // Invalid date, continue
-            }
-          }
-
-          // Location match bonus
-          if (tenantLocation && house.location &&
-              (house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
-               tenantLocation.toLowerCase().includes(house.location.toLowerCase()))) {
-            score += 10;
-          }
-
-          return {
-            ...house,
-            aiScore: Math.max(0, Math.min(100, Math.round(score))), // Ensure score is between 0-100
-            savings: Math.max(0, Math.round(avgPrice - (house.monthlyRent || 0)))
-          };
-        });
-
-        console.log('✅ AI recommendations generated:', recommendationsWithScore.length);
-        setAiRecommendations(recommendationsWithScore);
+        const basicRecommendations = generateBasicRecommendations();
+        setAiRecommendations(basicRecommendations);
         setIsLoadingAI(false);
       };
 
-      generateRecommendations();
+      // Simulate AI processing time for better UX
+      setTimeout(generateRecommendations, 1000);
     } else {
-      console.log('❌ No houses available for AI recommendations');
+      console.log('No houses available for AI recommendations');
       setAiRecommendations([]);
       setIsLoadingAI(false);
     }
   }, [houses, tenantLocation]);
+
+  // Basic recommendation fallback function
+  const generateBasicRecommendations = () => {
+    let locationHouses = houses;
+
+    // If tenant has a location, filter by location
+    if (tenantLocation) {
+      locationHouses = houses.filter(house =>
+        house.location && (
+          house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
+          tenantLocation.toLowerCase().includes(house.location.toLowerCase())
+        )
+      );
+    }
+
+    // If no houses in specific location or no location set, use all houses
+    if (locationHouses.length === 0) {
+      locationHouses = houses;
+    }
+
+    // Calculate average price
+    const avgPrice = locationHouses.reduce((sum, house) => sum + (house.monthlyRent || 0), 0) / locationHouses.length;
+
+    // Find cheaper houses (below average price) or just sort by price if all are expensive
+    let cheaperHouses = locationHouses.filter(house => (house.monthlyRent || 0) < avgPrice);
+
+    // If no houses are below average, take the cheapest ones
+    if (cheaperHouses.length === 0) {
+      cheaperHouses = locationHouses
+        .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
+        .slice(0, 5);
+    } else {
+      cheaperHouses = cheaperHouses
+        .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
+        .slice(0, 5);
+    }
+
+    // Add basic scoring
+    return cheaperHouses.map(house => {
+      let score = 100;
+
+      // Price factor (cheaper = higher score)
+      const priceRatio = (house.monthlyRent || avgPrice) / avgPrice;
+      score -= Math.min(priceRatio * 30, 40);
+
+      // Rating factor
+      if (house.rating) {
+        score += (house.rating / 5) * 20;
+      }
+
+      // Location match bonus
+      if (tenantLocation && house.location &&
+          (house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
+           tenantLocation.toLowerCase().includes(house.location.toLowerCase()))) {
+        score += 10;
+      }
+
+      return {
+        ...house,
+        aiScore: Math.max(0, Math.min(100, Math.round(score))),
+        savings: Math.max(0, Math.round(avgPrice - (house.monthlyRent || 0)))
+      };
+    });
+  };
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -393,12 +307,73 @@ function TenantPage() {
     toast.success(`Payment initiated for ${house.title}`);
   };
 
+  // Handle viewing recommendations from chatbot
+  const handleViewRecommendations = (recommendations, preferences) => {
+    setChatbotRecommendations(recommendations);
+    setChatbotPreferences(preferences);
+
+    // Store in localStorage for persistence
+    localStorage.setItem('chatbot_recommendations', JSON.stringify({
+      houses: recommendations,
+      preferences: preferences,
+      timestamp: new Date().toISOString()
+    }));
+
+    // Switch to browse tab to show recommendations
+    setActiveTab('browse');
+
+    // Scroll to top after a brief delay to show highlighted recommendations
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 500);
+  };
+
+  // Handle clearing chatbot recommendations
+  const handleClearChatbotRecommendations = () => {
+    setChatbotRecommendations([]);
+    setChatbotPreferences(null);
+    localStorage.removeItem('chatbot_recommendations');
+    toast.success('AI recommendations cleared', {
+      duration: 3000
+    });
+  };
+
+  // Scroll to specific house in the main list
+  const scrollToHouse = (houseId) => {
+    const houseElement = document.getElementById(`house-${houseId}`);
+    if (houseElement) {
+      houseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Add temporary highlight effect
+      houseElement.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.5)';
+      setTimeout(() => {
+        houseElement.style.boxShadow = '';
+      }, 3000);
+      toast.success('Scrolled to selected house');
+    } else {
+      toast.error('House not found in current view');
+    }
+  };
+
   return (
     <div className={`landlord-dashboard ${isDarkMode ? 'dark' : 'light'} tenant-full`}>
       <header className="dashboard-header">
         <div className="header-content">
           <h1>House Hunter - Tenant</h1>
           <div className="header-actions">
+            <button onClick={() => setShowChatbot(true)} className="chatbot-btn">
+              <MessageCircle size={20} />
+              AI Assistant
+            </button>
+            {chatbotRecommendations.length > 0 && (
+              <button
+                onClick={handleClearChatbotRecommendations}
+                className="clear-recommendations-btn"
+                title="Remove AI recommendations"
+              >
+                <X size={16} />
+                Clear AI
+              </button>
+            )}
             <button onClick={toggleTheme} className="theme-btn">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -431,14 +406,14 @@ function TenantPage() {
         <div className="tabs">
           <button
             className={`tab ${activeTab === 'browse' ? 'active' : ''}`}
-            onClick={() => setActiveTab('browse')}
+            onClick={() => handleTabChange('browse')}
           >
             <Home size={20} />
             Browse Houses
           </button>
           <button
             className={`tab ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ai')}
+            onClick={() => handleTabChange('ai')}
           >
             <Sparkles size={20} />
             AI Recommendations
@@ -462,6 +437,64 @@ function TenantPage() {
               </div>
             </div>
 
+            {/* Chatbot AI Recommendations Section */}
+            {chatbotRecommendations.length > 0 && (
+              <div className="ai-recommendations-section">
+                <div className="section-header">
+                  <div className="header-info">
+                    <h2>AI RECOMMENDATIONS</h2>
+                    <p>Personalized matches from AI Assistant</p>
+                  </div>
+                  {chatbotPreferences && (
+                    <div className="ai-preferences">
+                      <span>{chatbotPreferences.location}</span>
+                      <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="houses-grid">
+                  {chatbotRecommendations.map(house => (
+                    <div key={`chatbot-${house.id}`} className="house-card-container">
+                      <HouseCard
+                        house={house}
+                        userType="tenant"
+                        onChat={() => handleChat(house)}
+                        onPayment={() => handlePayment(house)}
+                        isDarkMode={isDarkMode}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Regular AI Recommendations Section */}
+            {aiRecommendations.length > 0 && chatbotRecommendations.length === 0 && (
+              <div className="ai-recommendations-section">
+                <div className="section-header">
+                  <div className="header-info">
+                    <h2>AI RECOMMENDATIONS</h2>
+                    <p>Perfect matches based on your preferences</p>
+                  </div>
+                </div>
+
+                <div className="houses-grid">
+                  {aiRecommendations.map(house => (
+                    <div key={`ai-${house.id}`} className="house-card-container">
+                      <HouseCard
+                        house={house}
+                        userType="tenant"
+                        onChat={() => handleChat(house)}
+                        onPayment={() => handlePayment(house)}
+                        isDarkMode={isDarkMode}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="houses-section">
               <div className="section-header">
                 <div className="header-info">
@@ -471,17 +504,30 @@ function TenantPage() {
               </div>
 
               <div className="houses-grid">
-                {filteredHouses.map(house => (
-                  <div key={house.id} className="house-card-container">
-                    <HouseCard
-                      house={house}
-                      userType="tenant"
-                      onChat={() => handleChat(house)}
-                      onPayment={() => handlePayment(house)}
-                      isDarkMode={isDarkMode}
-                    />
-                  </div>
-                ))}
+                {filteredHouses.map(house => {
+                  const isRecommended = chatbotRecommendations.some(rec => rec.id === house.id);
+                  return (
+                    <div
+                      key={house.id}
+                      id={`house-${house.id}`}
+                      className={`house-card-container ${isRecommended ? 'ai-recommended' : ''}`}
+                    >
+                      {isRecommended && (
+                        <div className="ai-recommendation-badge">
+                          <Sparkles size={14} />
+                          AI RECOMMENDATION
+                        </div>
+                      )}
+                      <HouseCard
+                        house={house}
+                        userType="tenant"
+                        onChat={() => handleChat(house)}
+                        onPayment={() => handlePayment(house)}
+                        isDarkMode={isDarkMode}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               {filteredHouses.length === 0 && (
@@ -539,6 +585,10 @@ function TenantPage() {
                       <TrendingDown size={14} />
                       <span>Save KES {house.savings.toLocaleString()}</span>
                     </div>
+                    <div className="location-badge">
+                      <MapPin size={14} />
+                      <span>{house.location}</span>
+                    </div>
                     <HouseCard
                       house={house}
                       userType="tenant"
@@ -566,6 +616,16 @@ function TenantPage() {
           </div>
         )}
       </div>
+
+      {showChatbot && (
+        <Chatbot
+          houses={houses}
+          onClose={() => setShowChatbot(false)}
+          isDarkMode={isDarkMode}
+          onViewRecommendations={handleViewRecommendations}
+        />
+      )}
+
     </div>
   );
 }

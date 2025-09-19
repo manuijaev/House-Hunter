@@ -47,7 +47,11 @@ export const saveImageToLocalStorage = (file, timeout = 30000) => {
               compressedSize: compressedData.length
             });
           } catch (storageError) {
-            reject(new Error('Failed to save image to storage. Storage might be full.'));
+            if (storageError.name === 'QuotaExceededError') {
+              reject(new Error('Storage quota exceeded. Please clear some images or use a different browser.'));
+            } else {
+              reject(new Error('Failed to save image to storage. Storage might be full or unavailable.'));
+            }
           }
         }).catch(compressError => {
           reject(new Error('Failed to compress image: ' + compressError.message));
@@ -74,7 +78,11 @@ export const saveImageToLocalStorage = (file, timeout = 30000) => {
             compressed: false
           });
         } catch (storageError) {
-          reject(new Error('Failed to save image to storage. Storage might be full.'));
+          if (storageError.name === 'QuotaExceededError') {
+            reject(new Error('Storage quota exceeded. Please clear some images or use a different browser.'));
+          } else {
+            reject(new Error('Failed to save image to storage. Storage might be full or unavailable.'));
+          }
         }
       }
     };

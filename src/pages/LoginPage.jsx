@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { House, Search, User, Key, Lock, Mail, Phone, MapPin } from 'lucide-react';
+import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import './LoginPage.css';
 
 function LoginPage() {
@@ -19,6 +21,10 @@ function LoginPage() {
     location: ''
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const { login, signup, currentUser, userType: authUserType } = useAuth();
   const navigate = useNavigate();
@@ -35,15 +41,26 @@ function LoginPage() {
   }, [currentUser, authUserType, navigate]);
 
   const handleInputChange = (e) => {
-    setFormData({
+    const newFormData = {
       ...formData,
       [e.target.name]: e.target.value
-    });
+    };
+    setFormData(newFormData);
+
+    if (e.target.name === 'confirmPassword' || e.target.name === 'password') {
+      if (newFormData.password !== newFormData.confirmPassword) {
+        setFieldErrors({ confirmPassword: 'Passwords do not match' });
+      } else {
+        setFieldErrors({});
+      }
+    }
   };
 
 const handleSubmit = async (e) => {
   e.preventDefault();
   setLoading(true);
+  setError('');
+  setFieldErrors({});
 
   try {
     if (isLogin) {
@@ -52,7 +69,14 @@ const handleSubmit = async (e) => {
       toast.success("Login successful!");
     } else {
       if (formData.password !== formData.confirmPassword) {
-        toast.error("Passwords do not match");
+        setFieldErrors({ confirmPassword: 'Passwords do not match' });
+        setLoading(false);
+        return;
+      }
+
+      if (formData.password.length < 6) {
+        setError("Password must be at least 6 characters long");
+        setLoading(false);
         return;
       }
 
@@ -68,7 +92,41 @@ const handleSubmit = async (e) => {
     }
   } catch (error) {
     console.error("Auth error:", error);
-    toast.error(error.message);
+
+    let errorMessage = "An error occurred. Please try again.";
+
+    if (isLogin) {
+      // Login errors
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = "Incorrect password. Please check your password and try again.";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address format.";
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = "This account has been disabled. Please contact support.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many failed login attempts. Please try again later.";
+      } else {
+        errorMessage = "Login failed. Please check your credentials and try again.";
+      }
+    } else {
+      // Signup errors
+      if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address format.";
+      } else if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "An account with this email address already exists. Please try logging in instead.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak. Please choose a stronger password.";
+      } else if (error.code === 'auth/operation-not-allowed') {
+        errorMessage = "Email/password accounts are not enabled. Please contact support.";
+      } else if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check your Firestore security rules to allow authenticated users to write to the users collection.";
+      } else if (error.code === 'unavailable') {
+        errorMessage = "Service temporarily unavailable. Please try again later.";
+      } else {
+        errorMessage = `Registration failed: ${error.message || 'Please try again.'}`;
+      }
+      setError(errorMessage);
+    }
   } finally {
     setLoading(false);
   }
@@ -197,26 +255,42 @@ const handleSubmit = async (e) => {
             <div className="form-group">
               <Key size={20} className="input-icon" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 name="password"
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleInputChange}
                 required
               />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
 
             {!isLogin && (
               <div className="form-group">
                 <Key size={20} className="input-icon" />
                 <input
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
+                  className={fieldErrors.confirmPassword ? 'error' : ''}
                   required
                 />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+                {fieldErrors.confirmPassword && <span className="field-error">{fieldErrors.confirmPassword}</span>}
               </div>
             )}
 
@@ -225,13 +299,15 @@ const handleSubmit = async (e) => {
             </button>
           </form>
 
+          {error && <p className="error-message">{error}</p>}
+
           <div className="auth-footer">
             <p>
               {isLogin ? "Don't have an account?" : "Already have an account?"}
               <button
                 type="button"
                 className="toggle-btn"
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => { setIsLogin(!isLogin); setError(''); setFieldErrors({}); }}
               >
                 {isLogin ? 'Sign Up' : 'Sign In'}
               </button>
