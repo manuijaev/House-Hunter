@@ -27,6 +27,7 @@ import {
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
 import AddHouseModal from '../components/AddHouseModal';
+import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 
 function LandlordDashboard() {
@@ -190,7 +191,10 @@ function LandlordDashboard() {
     <div className={`landlord-dashboard ${isDarkMode ? 'dark' : 'light'} ${activeTab === 'analytics' ? 'analytics-full' : activeTab === 'houses' ? 'houses-full' : ''}`}>
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>House Hunter - Landlord</h1>
+          <div className="header-title">
+            <img src={logo} alt="House Hunter Logo" className="header-logo" />
+            <h1>House Hunter - Landlord</h1>
+          </div>
           <div className="header-actions">
             <button onClick={toggleTheme} className="theme-btn">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}

@@ -32,6 +32,15 @@
   opacity: 0.9;
 }
 
+.logo-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .hero-content h1 {
   font-size: 3rem;
   font-weight: 700;
@@ -146,6 +155,11 @@
   align-items: center;
 }
 
+.form-group-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
 .input-icon {
   position: absolute;
   left: 1rem;
@@ -249,10 +263,12 @@
 }
 
 .field-error {
-  color: red;
+  color: #e74c3c;
   font-size: 0.8rem;
   margin-top: 0.5rem;
   display: block;
+  padding-left: 0.5rem;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

@@ -31,6 +31,7 @@ import {
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
 import Chatbot from '../components/Chatbot';
+import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 
 function TenantPage() {
@@ -358,7 +359,10 @@ function TenantPage() {
     <div className={`landlord-dashboard ${isDarkMode ? 'dark' : 'light'} tenant-full`}>
       <header className="dashboard-header">
         <div className="header-content">
-          <h1>House Hunter - Tenant</h1>
+          <div className="header-title">
+            <img src={logo} alt="House Hunter Logo" className="header-logo" />
+            <h1>House Hunter - Tenant</h1>
+          </div>
           <div className="header-actions">
             <button onClick={() => setShowChatbot(true)} className="chatbot-btn">
               <MessageCircle size={20} />

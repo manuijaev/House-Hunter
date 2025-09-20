@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import logo from '../assets/logo.jpeg';
 import './LoginPage.css';
 
 function LoginPage() {
@@ -138,7 +139,7 @@ const handleSubmit = async (e) => {
       <div className="hero-section">
         <div className="hero-content">
           <div className="hero-icon">
-            <House size={60} />
+            <img src={logo} alt="House Hunter Logo" className="logo-image" />
           </div>
           <h1>House Hunter</h1>
           <p className="hero-subtitle">
@@ -272,24 +273,26 @@ const handleSubmit = async (e) => {
             </div>
 
             {!isLogin && (
-              <div className="form-group">
-                <Key size={20} className="input-icon" />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  name="confirmPassword"
-                  placeholder="Confirm Password"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className={fieldErrors.confirmPassword ? 'error' : ''}
-                  required
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+              <div className="form-group-wrapper">
+                <div className="form-group">
+                  <Key size={20} className="input-icon" />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    name="confirmPassword"
+                    placeholder="Confirm Password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    className={fieldErrors.confirmPassword ? 'error' : ''}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
                 {fieldErrors.confirmPassword && <span className="field-error">{fieldErrors.confirmPassword}</span>}
               </div>
             )}

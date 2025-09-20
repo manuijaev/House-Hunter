@@ -304,8 +304,6 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
               <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
                 <Camera size={40} />
                 <p>Click to upload images</p>
-                <p className="upload-hint">Upload multiple images (max 10, any size)</p>
-                <p className="upload-subhint">Camera or gallery - any image size</p>
               </div>
               <input
                 ref={fileInputRef}
