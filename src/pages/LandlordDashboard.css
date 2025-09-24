@@ -363,8 +363,8 @@ i.landlord-dashboard {
 
 .ai-recommended {
   position: relative;
-  transform: scale(1.02);
   z-index: 10;
+  margin-bottom: 1rem;
 }
 
 .ai-recommendation-badge {

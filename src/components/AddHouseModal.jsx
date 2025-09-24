@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  X, 
-  Upload, 
-  Home, 
-  MapPin, 
+import {
+  X,
+  Upload,
+  Home,
+  MapPin,
   FileText,
-  Camera
+  Camera,
+  User
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { saveImageToLocalStorage, removeImageFromLocalStorage } from '../utils/LocalStorage';
@@ -21,6 +22,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
     availableDate: house?.availableDate || '',
     contactPhone: house?.contactPhone || '',
     contactEmail: house?.contactEmail || '',
+    displayName: house?.displayName || '',
     images: house?.images || []
   });
 
@@ -40,6 +42,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       availableDate: house?.availableDate || '',
       contactPhone: house?.contactPhone || '',
       contactEmail: house?.contactEmail || '',
+      displayName: house?.displayName || '',
       images: house?.images || []
     };
     console.log('Setting form data to:', newFormData);
@@ -170,6 +173,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
         availableDate: '',
         contactPhone: '',
         contactEmail: '',
+        displayName: '',
         images: []
       });
 
@@ -202,6 +206,18 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
                 name="title"
                 placeholder="House Title (e.g., 3 Bedroom Apartment)"
                 value={formData.title}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <User size={20} className="input-icon" />
+              <input
+                type="text"
+                name="displayName"
+                placeholder="Your Display Name (e.g., John Doe Properties)"
+                value={formData.displayName}
                 onChange={handleInputChange}
                 required
               />

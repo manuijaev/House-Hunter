@@ -18,7 +18,9 @@ A modern, full-stack web application that connects tenants with landlords in Nai
 - **Image Upload**: Upload multiple high-quality images for each property
 - **Vacancy Management**: Mark properties as vacant or occupied
 - **Analytics Dashboard**: View property statistics and performance metrics
-- **Contact Management**: Manage tenant inquiries and communications
+- **Real-time Chat**: Communicate with tenants through integrated chat system
+- **Message Management**: Clear individual messages or delete entire conversations
+- **Conversation Overview**: View all active chats with unread indicators
 - **Data Management**: Reset all data or delete account with confirmation
 
 ### Universal Features
@@ -67,8 +69,13 @@ house-hunter/
 │   │   ├── AddHouseModal.css      # Modal styling
 │   │   ├── Chatbot.jsx            # AI assistant component
 │   │   ├── Chatbot.css            # Chatbot styling
+│   │   ├── ChatModal.jsx          # Chat modal component
+│   │   ├── ChatModal.css          # Chat modal styling
 │   │   ├── HouseCard.jsx          # Property display card
-│   │   └── HouseCard.css          # Card styling
+│   │   ├── HouseCard.css          # Card styling
+│   │   ├── LandlordChats.jsx      # Landlord chat interface
+│   │   ├── LandlordChats.css      # Landlord chat styling
+│   │   └── TenantChats.jsx        # Tenant chat interface
 │   ├── config/
 │   │   └── openai.js              # OpenAI API configuration
 │   ├── contexts/
@@ -175,11 +182,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    
+
     // Houses can be read by anyone, written by authenticated users
     match /houses/{houseId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+
+    // Messages can be read/written by authenticated users involved in the conversation
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null &&
+        (request.auth.uid == resource.data.senderId ||
+         request.auth.uid == resource.data.receiverId);
     }
   }
 }
@@ -304,6 +318,21 @@ service cloud.firestore {
   landlordName: "Jane Smith",
   isVacant: true,
   createdAt: "2024-01-01T00:00:00.000Z"
+}
+```
+
+### Messages Collection
+```javascript
+{
+  id: "message_id",
+  text: "Hello, I'm interested in your property",
+  houseId: "house_id",
+  senderId: "tenant_user_id",
+  senderName: "John Doe",
+  senderEmail: "tenant@example.com",
+  receiverId: "landlord_user_id",
+  receiverName: "Jane Smith",
+  timestamp: "2024-01-01T12:00:00.000Z"
 }
 ```
 

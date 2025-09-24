@@ -23,8 +23,6 @@ import {
   ChevronDown,
   Trash2,
   RotateCcw,
-  Sparkles,
-  TrendingDown,
   Star,
   X
 } from 'lucide-react';
@@ -42,10 +40,7 @@ function TenantPage() {
   const [searchLocation, setSearchLocation] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState('browse');
   const [tenantLocation, setTenantLocation] = useState('');
-  const [aiRecommendations, setAiRecommendations] = useState([]);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatbotRecommendations, setChatbotRecommendations] = useState([]);
   const [chatbotPreferences, setChatbotPreferences] = useState(null);
@@ -88,39 +83,17 @@ function TenantPage() {
   useEffect(() => {
     let housesToDisplay = houses;
 
-  
+
     if (searchLocation.trim() !== '') {
       housesToDisplay = houses.filter(house =>
         house.location.toLowerCase().includes(searchLocation.toLowerCase())
       );
     }
 
-    if (chatbotRecommendations.length > 0) {
-      housesToDisplay = housesToDisplay.sort((a, b) => {
-        const aIsRecommended = chatbotRecommendations.some(rec => rec.id === a.id);
-        const bIsRecommended = chatbotRecommendations.some(rec => rec.id === b.id);
-
-        if (aIsRecommended && !bIsRecommended) return -1;
-        if (!aIsRecommended && bIsRecommended) return 1;
-        return 0;
-      });
-    }
-
     setFilteredHouses(housesToDisplay);
-  }, [searchLocation, houses, chatbotRecommendations]);
+  }, [searchLocation, houses]);
 
   
-  useEffect(() => {
-    const savedRecommendations = localStorage.getItem('ai_recommendations');
-    if (savedRecommendations) {
-      try {
-        const data = JSON.parse(savedRecommendations);
-        setAiRecommendations(data.houses || []);
-      } catch (error) {
-        console.error('Error loading AI recommendations:', error);
-      }
-    }
-  }, []);
 
  
   useEffect(() => {
@@ -136,9 +109,6 @@ function TenantPage() {
     }
   }, []);
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
 
 
   
@@ -178,7 +148,7 @@ function TenantPage() {
 
   // Track unread messages per house for tenant and show notifications
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || houses.length === 0) return;
 
     const q = query(
       collection(db, 'messages'),
@@ -207,7 +177,9 @@ function TenantPage() {
 
       // Show toast for each new message
       newMessages.forEach(msg => {
-        toast.success(`New message from ${msg.senderName}: ${msg.text}`, {
+        const house = houses.find(h => h.id === msg.houseId);
+        const landlordName = house ? house.landlordName : 'Landlord';
+        toast.success(`New message from ${landlordName}: ${msg.text}`, {
           duration: 5000,
         });
       });
@@ -238,94 +210,8 @@ function TenantPage() {
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser, houses]);
 
-  // Generate AI recommendations
-  useEffect(() => {
-    if (houses.length > 0) {
-      setIsLoadingAI(true);
-      const generateRecommendations = () => {
-        console.log('Generating AI recommendations...');
-        console.log('Total houses:', houses.length);
-        console.log('Tenant location:', tenantLocation);
-
-        const basicRecommendations = generateBasicRecommendations();
-        setAiRecommendations(basicRecommendations);
-        setIsLoadingAI(false);
-      };
-
-      // Simulate AI processing time for better UX
-      setTimeout(generateRecommendations, 1000);
-    } else {
-      console.log('No houses available for AI recommendations');
-      setAiRecommendations([]);
-      setIsLoadingAI(false);
-    }
-  }, [houses, tenantLocation]);
-
-  // Basic recommendation fallback function
-  const generateBasicRecommendations = () => {
-    let locationHouses = houses;
-
-    // If tenant has a location, filter by location
-    if (tenantLocation) {
-      locationHouses = houses.filter(house =>
-        house.location && (
-          house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
-          tenantLocation.toLowerCase().includes(house.location.toLowerCase())
-        )
-      );
-    }
-
-    // If no houses in specific location or no location set, use all houses
-    if (locationHouses.length === 0) {
-      locationHouses = houses;
-    }
-
-    // Calculate average price
-    const avgPrice = locationHouses.reduce((sum, house) => sum + (house.monthlyRent || 0), 0) / locationHouses.length;
-
-    // Find cheaper houses (below average price) or just sort by price if all are expensive
-    let cheaperHouses = locationHouses.filter(house => (house.monthlyRent || 0) < avgPrice);
-
-    // If no houses are below average, take the cheapest ones
-    if (cheaperHouses.length === 0) {
-      cheaperHouses = locationHouses
-        .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
-        .slice(0, 5);
-    } else {
-      cheaperHouses = cheaperHouses
-        .sort((a, b) => (a.monthlyRent || 0) - (b.monthlyRent || 0))
-        .slice(0, 5);
-    }
-
-    // Add basic scoring
-    return cheaperHouses.map(house => {
-      let score = 100;
-
-      // Price factor (cheaper = higher score)
-      const priceRatio = (house.monthlyRent || avgPrice) / avgPrice;
-      score -= Math.min(priceRatio * 30, 40);
-
-      // Rating factor
-      if (house.rating) {
-        score += (house.rating / 5) * 20;
-      }
-
-      // Location match bonus
-      if (tenantLocation && house.location &&
-          (house.location.toLowerCase().includes(tenantLocation.toLowerCase()) ||
-           tenantLocation.toLowerCase().includes(house.location.toLowerCase()))) {
-        score += 10;
-      }
-
-      return {
-        ...house,
-        aiScore: Math.max(0, Math.min(100, Math.round(score))),
-        savings: Math.max(0, Math.round(avgPrice - (house.monthlyRent || 0)))
-      };
-    });
-  };
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -395,9 +281,6 @@ function TenantPage() {
       preferences: preferences,
       timestamp: new Date().toISOString()
     }));
-
-    // Switch to browse tab to show recommendations
-    setActiveTab('browse');
 
     // Scroll to top after a brief delay to show highlighted recommendations
     setTimeout(() => {
@@ -483,216 +366,90 @@ function TenantPage() {
       </header>
 
       <div className="dashboard-content">
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'browse' ? 'active' : ''}`}
-            onClick={() => handleTabChange('browse')}
-          >
-            <Home size={20} />
-            Browse Houses
-          </button>
-          <button
-            className={`tab ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => handleTabChange('ai')}
-          >
-            <Sparkles size={20} />
-            AI Recommendations
-          </button>
-        </div>
-
-        {activeTab === 'browse' && (
-          <>
-            <div className="search-section">
-              <div className="search-container">
-                <div className="search-input-wrapper">
-                  <Search size={20} className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Search by location (e.g., Westlands, Nairobi)"
-                    value={searchLocation}
-                    onChange={(e) => setSearchLocation(e.target.value)}
-                    className="search-input"
-                  />
-                </div>
+        {chatbotRecommendations.length === 0 && (
+          <div className="search-section">
+            <div className="search-container">
+              <div className="search-input-wrapper">
+                <Search size={20} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search by location (e.g., Westlands, Nairobi)"
+                  value={searchLocation}
+                  onChange={(e) => setSearchLocation(e.target.value)}
+                  className="search-input"
+                />
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Chatbot AI Recommendations Section */}
-            {chatbotRecommendations.length > 0 && (
-              <div className="ai-recommendations-section">
-                <div className="section-header">
-                  <div className="header-info">
-                    <h2>AI RECOMMENDATIONS</h2>
-                    <p>Personalized matches from AI Assistant</p>
-                  </div>
-                  {chatbotPreferences && (
-                    <div className="ai-preferences">
-                      <span>{chatbotPreferences.location}</span>
-                      <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="houses-grid">
-                  {chatbotRecommendations.map(house => (
-                    <div key={`chatbot-${house.id}`} className="house-card-container">
-                      <HouseCard
-                        house={house}
-                        userType="tenant"
-                        onChat={() => handleChat(house)}
-                        onPayment={() => handlePayment(house)}
-                        isDarkMode={isDarkMode}
-                        messageCount={houseMessageCounts[house.id] || 0}
-                      />
-                    </div>
-                  ))}
-                </div>
+        {/* Show chatbot recommendations or main properties */}
+        {chatbotRecommendations.length > 0 ? (
+          <div className="ai-recommendations-section">
+            <div className="section-header">
+              <div className="header-info">
+                <h2>AI RECOMMENDATIONS</h2>
+                <p>Personalized matches from AI Assistant</p>
               </div>
-            )}
-
-            {/* Regular AI Recommendations Section */}
-            {aiRecommendations.length > 0 && chatbotRecommendations.length === 0 && (
-              <div className="ai-recommendations-section">
-                <div className="section-header">
-                  <div className="header-info">
-                    <h2>AI RECOMMENDATIONS</h2>
-                    <p>Perfect matches based on your preferences</p>
-                  </div>
-                </div>
-
-                <div className="houses-grid">
-                  {aiRecommendations.map(house => (
-                    <div key={`ai-${house.id}`} className="house-card-container">
-                      <HouseCard
-                        house={house}
-                        userType="tenant"
-                        onChat={() => handleChat(house)}
-                        onPayment={() => handlePayment(house)}
-                        isDarkMode={isDarkMode}
-                        messageCount={houseMessageCounts[house.id] || 0}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="houses-section">
-              <div className="section-header">
-                <div className="header-info">
-                  <h2>Available Properties</h2>
-                  <p>{filteredHouses.length} properties found</p>
-                </div>
-              </div>
-
-              <div className="houses-grid">
-                {filteredHouses.map(house => {
-                  const isRecommended = chatbotRecommendations.some(rec => rec.id === house.id);
-                  return (
-                    <div
-                      key={house.id}
-                      id={`house-${house.id}`}
-                      className={`house-card-container ${isRecommended ? 'ai-recommended' : ''}`}
-                    >
-                      {isRecommended && (
-                        <div className="ai-recommendation-badge">
-                          <Sparkles size={14} />
-                          AI RECOMMENDATION
-                        </div>
-                      )}
-                      <HouseCard
-                        house={house}
-                        userType="tenant"
-                        onChat={() => handleChat(house)}
-                        onPayment={() => handlePayment(house)}
-                        isDarkMode={isDarkMode}
-                        messageCount={houseMessageCounts[house.id] || 0}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              {filteredHouses.length === 0 && (
-                <div className="no-houses">
-                  <Home size={60} />
-                  <h3>No houses found</h3>
-                  <p>
-                    {searchLocation
-                      ? `No properties found in "${searchLocation}". Try a different location.`
-                      : 'No available properties at the moment.'
-                    }
-                  </p>
+              {chatbotPreferences && (
+                <div className="ai-preferences">
+                  <span>{chatbotPreferences.location}</span>
+                  <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
                 </div>
               )}
             </div>
-          </>
-        )}
 
-        {activeTab === 'ai' && (
-          <div className="ai-section">
+            <div className="houses-grid">
+              {chatbotRecommendations.map(house => (
+                <div key={`chatbot-${house.id}`} className="house-card-container">
+                  <HouseCard
+                    house={house}
+                    userType="tenant"
+                    onChat={() => handleChat(house)}
+                    onPayment={() => handlePayment(house)}
+                    isDarkMode={isDarkMode}
+                    messageCount={houseMessageCounts[house.id] || 0}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="houses-section">
             <div className="section-header">
               <div className="header-info">
-                <h2>AI Recommendations</h2>
-                <p>Cheaper houses in your area powered by AI</p>
+                <h2>Available Properties</h2>
+                <p>{filteredHouses.length} properties found</p>
               </div>
             </div>
 
-            {tenantLocation && (
-              <div className="location-info">
-                <MapPin size={16} />
-                <span>Based on your location: <strong>{tenantLocation}</strong></span>
-              </div>
-            )}
-
-            {isLoadingAI ? (
-              <div className="ai-loading">
-                <Sparkles size={48} className="loading-sparkles" />
-                <h3>AI is analyzing properties...</h3>
-                <p>Finding the best deals for you in {tenantLocation || 'your area'}</p>
-                <div className="loading-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+            <div className="houses-grid">
+              {filteredHouses.map(house => (
+                <div
+                  key={house.id}
+                  id={`house-${house.id}`}
+                  className="house-card-container"
+                >
+                  <HouseCard
+                    house={house}
+                    userType="tenant"
+                    onChat={() => handleChat(house)}
+                    onPayment={() => handlePayment(house)}
+                    isDarkMode={isDarkMode}
+                    messageCount={houseMessageCounts[house.id] || 0}
+                  />
                 </div>
-              </div>
-            ) : (
-              <div className="recommendations-grid">
-                {aiRecommendations.map((house, index) => (
-                  <div key={house.id} className="recommendation-card">
-                    <div className="ai-badge">
-                      <Sparkles size={14} />
-                      <span>AI Score: {house.aiScore}/100</span>
-                    </div>
-                    <div className="savings-badge">
-                      <TrendingDown size={14} />
-                      <span>Save KES {house.savings.toLocaleString()}</span>
-                    </div>
-                    <div className="location-badge">
-                      <MapPin size={14} />
-                      <span>{house.location}</span>
-                    </div>
-                    <HouseCard
-                      house={house}
-                      userType="tenant"
-                      onChat={() => handleChat(house)}
-                      onPayment={() => handlePayment(house)}
-                      isDarkMode={isDarkMode}
-                      messageCount={houseMessageCounts[house.id] || 0}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+              ))}
+            </div>
 
-            {aiRecommendations.length === 0 && (
-              <div className="no-recommendations">
-                <Sparkles size={60} />
-                <h3>No AI recommendations yet</h3>
+            {filteredHouses.length === 0 && (
+              <div className="no-houses">
+                <Home size={60} />
+                <h3>No houses found</h3>
                 <p>
-                  {tenantLocation
-                    ? `We're analyzing houses in ${tenantLocation} to find you the best deals. Check back soon!`
-                    : 'Please update your location in your profile to get personalized recommendations.'
+                  {searchLocation
+                    ? `No properties found in "${searchLocation}". Try a different location.`
+                    : 'No available properties at the moment.'
                   }
                 </p>
               </div>

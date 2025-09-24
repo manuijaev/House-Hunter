@@ -69,6 +69,7 @@ function LandlordDashboard() {
     }
   }, []);
 
+
   // Track unread messages for landlord and show notifications
   useEffect(() => {
     if (!currentUser) return;
@@ -135,7 +136,7 @@ function LandlordDashboard() {
       const houseWithLandlord = {
         ...houseData,
         landlordId: currentUser.uid,
-        landlordName: currentUser.displayName || 'Landlord',
+        landlordName: houseData.displayName || currentUser.displayName || 'Landlord',
         createdAt: new Date().toISOString(),
         isVacant: true
       };
@@ -456,7 +457,7 @@ function LandlordDashboard() {
                 <p>Chat with your tenants</p>
               </div>
             </div>
-            <LandlordChats />
+            <LandlordChats isDarkMode={isDarkMode} />
           </div>
         )}
       </div>

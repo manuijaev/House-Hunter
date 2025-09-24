@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
@@ -24,14 +25,21 @@ export const AuthProvider = ({ children }) => {
       console.log('Attempting to create user with email:', email);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
+      // Set display name for the user
+      const displayName = `${userData.firstName} ${userData.lastName}`;
+      await updateProfile(user, {
+        displayName: displayName
+      });
+
       console.log('User created successfully:', user.uid);
-      
+
       // Save user type and additional data to Firestore
       try {
         await setDoc(doc(db, 'users', user.uid), {
           email: user.email,
           userType: userType,
+          displayName: displayName,
           ...userData,
           createdAt: new Date().toISOString()
         });
@@ -75,6 +83,19 @@ export const AuthProvider = ({ children }) => {
         const userData = userDoc.data();
         console.log('User data found:', userData);
         setUserType(userData.userType || 'tenant'); // Default to tenant if userType is missing
+
+        // Update displayName if it's not set in Firebase Auth but exists in Firestore
+        if (!user.displayName && userData.displayName) {
+          try {
+            await updateProfile(user, {
+              displayName: userData.displayName
+            });
+            console.log('Updated Firebase Auth displayName from Firestore');
+          } catch (updateError) {
+            console.error('Failed to update displayName:', updateError);
+          }
+        }
+
         return userData;
       } else {
         console.log('No user document found in Firestore, setting default userType');
