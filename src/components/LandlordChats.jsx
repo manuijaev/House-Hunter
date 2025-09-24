@@ -48,6 +48,7 @@ function LandlordChats({ isDarkMode }) {
         if (!grouped[key]) {
           grouped[key] = {
             houseId: msg.houseId,
+            houseTitle: msg.houseTitle || 'Unknown House',
             tenantId: msg.senderId,
             tenantName: msg.senderName || "Tenant",
             tenantEmail: msg.senderEmail,
@@ -257,6 +258,24 @@ function LandlordChats({ isDarkMode }) {
     const [localReplyingTo, setLocalReplyingTo] = useState(null);
     const [localReplyMessage, setLocalReplyMessage] = useState("");
     const [newMessageText, setNewMessageText] = useState("");
+    const [houseTitle, setHouseTitle] = useState(conversation.houseTitle);
+
+    // Fetch house title if unknown
+    useEffect(() => {
+      if (houseTitle !== 'Unknown House') return;
+
+      const fetchHouseTitle = async () => {
+        try {
+          const houseDoc = await getDoc(doc(db, 'houses', conversation.houseId));
+          if (houseDoc.exists()) {
+            setHouseTitle(houseDoc.data().title);
+          }
+        } catch (error) {
+          console.error('Error fetching house:', error);
+        }
+      };
+      fetchHouseTitle();
+    }, [houseTitle, conversation.houseId]);
 
     // Fetch messages for this specific conversation
     useEffect(() => {
@@ -460,8 +479,8 @@ function LandlordChats({ isDarkMode }) {
 
                 <div className="message-cluster">
                   <div className="message-header">
-                    <span className="message-sender-name">
-                      {group.isSent ? 'You' : group.senderName}
+                    <span className={`message-sender-name ${!group.isSent ? 'tenant-badge' : ''}`}>
+                      {group.isSent ? 'You' : 'Tenant'}
                     </span>
                     {group.senderEmail && !group.isSent && (
                       <span className="message-sender-email">({group.senderEmail})</span>
@@ -510,9 +529,6 @@ function LandlordChats({ isDarkMode }) {
                               className="reply-input"
                               autoFocus
                             />
-                            <button type="submit" className="reply-send-btn">
-                              Reply
-                            </button>
                           </form>
                         </div>
                       )}
@@ -530,14 +546,11 @@ function LandlordChats({ isDarkMode }) {
       <div className="tenant-chat-container">
         <div className="tenant-chat-header">
           <div className="tenant-info">
-            <div className="tenant-avatar">
-              {conversation.tenantName?.charAt(0).toUpperCase() || 'T'}
-            </div>
             <div className="tenant-details">
-              <h4>{conversation.tenantName}</h4>
-              <p>House {conversation.houseId}</p>
+              <h4 style={{ background: '#5a6fd8', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', display: 'inline-block' }}>{conversation.tenantName}</h4>
+              <p>House needed: {houseTitle}</p>
               {conversation.tenantEmail && (
-                <span className="tenant-email">{conversation.tenantEmail}</span>
+                <span className="tenant-email">Tenant's email:{conversation.tenantEmail}</span>
               )}
             </div>
           </div>
@@ -572,10 +585,12 @@ function LandlordChats({ isDarkMode }) {
 
   return (
     <div className={`landlord-chats ${isDarkMode ? 'dark' : 'light'}`}>
-      <div className="chats-header">
-        <h2>Tenant Conversations</h2>
-        <p>{conversations.length} active chats</p>
-        <button onClick={handleDeleteAllConversations} className="delete-all-btn">Delete All Conversations</button>
+      <div className="chats-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2>Tenant Conversations</h2>
+          <p>{conversations.length} active chats</p>
+        </div>
+        <button onClick={handleDeleteAllConversations} style={{ background: 'crimson', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s ease', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete All Conversations</button>
       </div>
 
       {conversations.length === 0 ? (

@@ -268,10 +268,10 @@
 }
 
 .send-btn {
-  width: 44px;
-  height: 44px;
+  width: 100px;
+  height: 45px;
   border: none;
-  border-radius: 50%;
+  border-radius: 100%;
   background: #3b82f6;
   color: white;
   cursor: pointer;

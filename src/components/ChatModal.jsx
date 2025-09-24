@@ -85,6 +85,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
       id: `temp-${Date.now()}`,
       text: messageText,
       houseId: house.id,
+      houseTitle: house.title,
       senderId: currentUser.uid,
       senderName: currentUser.displayName || "Tenant",
       senderEmail: currentUser.email,
@@ -100,6 +101,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
       await addDoc(collection(db, "messages"), {
         text: messageText,
         houseId: house.id,
+        houseTitle: house.title,
         senderId: currentUser.uid,
         senderName: currentUser.displayName || "Tenant",
         senderEmail: currentUser.email,
