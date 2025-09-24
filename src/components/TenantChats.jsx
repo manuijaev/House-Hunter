@@ -99,19 +99,6 @@ function TenantChats() {
           }
         });
 
-        // Check for new messages from other users
-        const previousRealMessages = prevMessages.filter(msg => !msg.id.startsWith('temp-'));
-        const newMessages = filtered.filter(msg =>
-          !previousRealMessages.some(prevMsg => prevMsg.id === msg.id) &&
-          msg.senderId !== currentUser.uid
-        );
-
-        // Show toast for new messages
-        newMessages.forEach(msg => {
-          toast.success(`New message from ${msg.senderName}: ${msg.text}`, {
-            duration: 5000,
-          });
-        });
 
         return allMessages.sort((a, b) => {
           const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;

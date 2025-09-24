@@ -176,7 +176,7 @@ function TenantPage() {
     fetchTenantLocation();
   }, [currentUser]);
 
-  // Track unread messages per house for tenant
+  // Track unread messages per house for tenant and show notifications
   useEffect(() => {
     if (!currentUser) return;
 
@@ -185,11 +185,35 @@ function TenantPage() {
       where('receiverId', '==', currentUser.uid)
     );
 
+    let previousMessages = [];
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Find new messages that arrived after last read time for each house
+      const newMessages = messages.filter(msg => {
+        const houseId = msg.houseId;
+        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadTimestamp = localStorage.getItem(lastReadKey);
+        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        const isNew = msgTime > lastReadTime;
+        const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
+        return isNew && isNotPrevious;
+      });
+
+      // Show toast for each new message
+      newMessages.forEach(msg => {
+        toast.success(`New message from ${msg.senderName}: ${msg.text}`, {
+          duration: 5000,
+        });
+      });
+
+      // Update previous messages
+      previousMessages = messages;
 
       // Group messages by houseId and count unread ones
       const counts = {};

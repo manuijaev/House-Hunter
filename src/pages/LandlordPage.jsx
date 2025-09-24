@@ -39,6 +39,7 @@ function LandlordDashboard() {
   const [activeTab, setActiveTab] = useState('houses');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -67,6 +68,58 @@ function LandlordDashboard() {
       setIsDarkMode(savedTheme === 'dark');
     }
   }, []);
+
+  // Track unread messages for landlord and show notifications
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const q = query(
+      collection(db, 'messages'),
+      where('receiverId', '==', currentUser.uid)
+    );
+
+    let previousMessages = [];
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Get last read timestamp from localStorage
+      const lastReadKey = `landlord_last_read_${currentUser.uid}`;
+      const lastReadTimestamp = localStorage.getItem(lastReadKey);
+      const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
+
+      // Find new messages that arrived after last read time
+      const newMessages = messages.filter(msg => {
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        const isNew = msgTime > lastReadTime;
+        const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
+        return isNew && isNotPrevious;
+      });
+
+      // Show toast for each new message
+      newMessages.forEach(msg => {
+        toast.success(`New message from ${msg.senderName}: ${msg.text}`, {
+          duration: 5000,
+        });
+      });
+
+      // Update previous messages
+      previousMessages = messages;
+
+      // Count unread messages (received after last read time)
+      const unreadCount = messages.filter(msg => {
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        return msgTime > lastReadTime;
+      }).length;
+
+      setUnreadMessages(unreadCount);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
@@ -204,10 +257,38 @@ function LandlordDashboard() {
               <>
                 <button
                   className="chat-btn"
-                  onClick={() => setActiveTab('chat')}
+                  onClick={() => {
+                    setActiveTab('chat');
+                    // Mark messages as read when opening chat
+                    const lastReadKey = `landlord_last_read_${currentUser.uid}`;
+                    localStorage.setItem(lastReadKey, new Date().toISOString());
+                    setUnreadMessages(0);
+                  }}
+                  style={{ position: 'relative' }}
                 >
                   <MessageCircle size={20} />
                   Chat
+                  {unreadMessages > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-8px',
+                        right: '-8px',
+                        background: '#dc3545',
+                        color: 'white',
+                        borderRadius: '50%',
+                        width: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {unreadMessages > 99 ? '99+' : unreadMessages}
+                    </span>
+                  )}
                 </button>
                 <button
                   className="analytics-btn"
