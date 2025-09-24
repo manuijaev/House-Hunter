@@ -1,0 +1,282 @@
+.landlord-chats {
+  padding: 20px;
+}
+
+.landlord-chats.dark {
+  color: #f9fafb;
+}
+
+.chats-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.landlord-chats.dark .chats-header {
+  border-bottom-color: #374151;
+}
+
+.chats-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.conversations-count {
+  color: #6b7280;
+  font-size: 14px;
+  margin-left: auto;
+}
+
+.landlord-chats.dark .conversations-count {
+  color: #9ca3af;
+}
+
+.landlord-chats-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #6b7280;
+}
+
+.landlord-chats-loading p {
+  margin: 12px 0 0 0;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.landlord-chats.dark .loading-spinner {
+  border-color: #374151;
+  border-top-color: #60a5fa;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.conversations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.conversation-item:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.landlord-chats.dark .conversation-item {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.conversation-item.unread {
+  border-left: 4px solid #3b82f6;
+  background: #eff6ff;
+}
+
+.landlord-chats.dark .conversation-item.unread {
+  background: #1e3a8a;
+  border-left-color: #60a5fa;
+}
+
+.conversation-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-right: 16px;
+}
+
+.landlord-chats.dark .conversation-avatar {
+  background: #374151;
+  color: #9ca3af;
+}
+
+.conversation-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.tenant-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.message-time {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.landlord-chats.dark .message-time {
+  color: #9ca3af;
+}
+
+.house-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.landlord-chats.dark .house-info {
+  color: #9ca3af;
+}
+
+.last-message {
+  font-size: 14px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landlord-chats.dark .last-message {
+  color: #f9fafb;
+}
+
+.conversation-item.unread .last-message {
+  font-weight: 500;
+}
+
+.conversation-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 16px;
+}
+
+.unread-badge {
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.no-conversations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.no-conversations h3 {
+  margin: 16px 0 8px 0;
+  color: #374151;
+}
+
+.landlord-chats.dark .no-conversations h3 {
+  color: #f9fafb;
+}
+
+.no-conversations p {
+  margin: 0;
+  font-size: 14px;
+  max-width: 400px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .landlord-chats {
+    padding: 16px;
+  }
+
+  .chats-header {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+  }
+
+  .chats-header h2 {
+    font-size: 20px;
+  }
+
+  .conversation-item {
+    padding: 12px;
+  }
+
+  .conversation-avatar {
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+  }
+
+  .tenant-name {
+    font-size: 14px;
+  }
+
+  .conversation-actions {
+    margin-left: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .landlord-chats {
+    padding: 12px;
+  }
+
+  .conversation-item {
+    padding: 10px;
+  }
+
+  .conversation-avatar {
+    width: 36px;
+    height: 36px;
+    margin-right: 10px;
+  }
+
+  .tenant-name {
+    font-size: 13px;
+  }
+
+  .house-info,
+  .last-message {
+    font-size: 13px;
+  }
+}

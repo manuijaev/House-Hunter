@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import '../components/HouseCard.css';
 
-function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy, userType, isDarkMode }) {
+function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy, userType, isDarkMode, messageCount = 0 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const nextImage = () => {
@@ -117,12 +117,34 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
 
           {userType === 'tenant' && house.isVacant && (
             <div className="action-buttons">
-              <button 
+              <button
                 className="chat-btn"
                 onClick={() => onChat(house)}
+                style={{ position: 'relative' }}
               >
                 <MessageCircle size={16} />
                 Chat
+                {messageCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      right: '-8px',
+                      background: '#dc3545',
+                      color: 'white',
+                      borderRadius: '50%',
+                      width: '18px',
+                      height: '18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {messageCount > 99 ? '99+' : messageCount}
+                  </span>
+                )}
               </button>
               <button 
                 className="payment-btn"

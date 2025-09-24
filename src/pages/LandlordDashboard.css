@@ -703,6 +703,25 @@ i.landlord-dashboard {
   transform: translateY(-2px);
 }
 
+.chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chat-btn:hover {
+  background: #5a6fd8;
+  transform: translateY(-2px);
+}
+
 .houses-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -821,6 +840,13 @@ html, body {
 }
 
 .analytics-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.chat-section {
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -947,6 +973,11 @@ html, body {
 }
 
 .landlord-dashboard.dark .houses-section {
+  background: #2d2d2d;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.landlord-dashboard.dark .chat-section {
   background: #2d2d2d;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
@@ -1181,5 +1212,73 @@ html, body {
 }
 
 .landlord-dashboard.dark.tenant-full .houses-section {
+  background: #1a1a1a;
+}
+
+.landlord-dashboard.tenant-full.chat-full {
+  width: 100vw;
+  min-height: 100vh;
+  position: relative;
+  margin: 0;
+}
+
+.landlord-dashboard.tenant-full.chat-full .dashboard-content {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  min-height: 100vh;
+}
+
+.landlord-dashboard.tenant-full.chat-full .chat-section {
+  width: 100vw;
+  min-height: 100vh;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.landlord-dashboard.dark.tenant-full.chat-full {
+  background: #1a1a1a;
+}
+
+.landlord-dashboard.dark.tenant-full.chat-full .chat-section {
+  background: #1a1a1a;
+}
+
+.landlord-dashboard.chat-full {
+  width: 100vw;
+  min-height: 100vh;
+  position: relative;
+  margin: 0;
+}
+
+.landlord-dashboard.chat-full .dashboard-content {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  min-height: 100vh;
+}
+
+.landlord-dashboard.chat-full .chat-section {
+  width: 100vw;
+  min-height: 100vh;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.landlord-dashboard.dark.chat-full {
+  background: #1a1a1a;
+}
+
+.landlord-dashboard.dark.chat-full .chat-section {
   background: #1a1a1a;
 }

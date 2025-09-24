@@ -27,6 +27,7 @@ import {
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
 import AddHouseModal from '../components/AddHouseModal';
+import LandlordChats from '../components/LandlordChats';
 import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 
@@ -188,7 +189,7 @@ function LandlordDashboard() {
   };
 
   return (
-    <div className={`landlord-dashboard ${isDarkMode ? 'dark' : 'light'} ${activeTab === 'analytics' ? 'analytics-full' : activeTab === 'houses' ? 'houses-full' : ''}`}>
+    <div className={`landlord-dashboard ${isDarkMode ? 'dark' : 'light'} ${activeTab === 'analytics' ? 'analytics-full' : activeTab === 'houses' ? 'houses-full' : activeTab === 'chat' ? 'chat-full' : ''}`}>
       <header className="dashboard-header">
         <div className="header-content">
           <div className="header-title">
@@ -201,6 +202,13 @@ function LandlordDashboard() {
             </button>
             {activeTab === 'houses' && (
               <>
+                <button
+                  className="chat-btn"
+                  onClick={() => setActiveTab('chat')}
+                >
+                  <MessageCircle size={20} />
+                  Chat
+                </button>
                 <button
                   className="analytics-btn"
                   onClick={() => setActiveTab('analytics')}
@@ -218,6 +226,15 @@ function LandlordDashboard() {
               </>
             )}
             {activeTab === 'analytics' && (
+              <button
+                className="back-to-houses-btn"
+                onClick={() => setActiveTab('houses')}
+              >
+                <Home size={20} />
+                Back to My Houses
+              </button>
+            )}
+            {activeTab === 'chat' && (
               <button
                 className="back-to-houses-btn"
                 onClick={() => setActiveTab('houses')}
@@ -270,6 +287,13 @@ function LandlordDashboard() {
           >
             <BarChart3 size={20} />
             Analytics
+          </button>
+          <button
+            className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <MessageCircle size={20} />
+            Chat
           </button>
         </div>
 
@@ -340,6 +364,18 @@ function LandlordDashboard() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'chat' && (
+          <div className="chat-section">
+            <div className="section-header">
+              <div className="header-info">
+                <h2>Messages</h2>
+                <p>Chat with your tenants</p>
+              </div>
+            </div>
+            <LandlordChats />
           </div>
         )}
       </div>

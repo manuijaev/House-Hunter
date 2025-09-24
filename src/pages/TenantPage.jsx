@@ -31,6 +31,7 @@ import {
 import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
 import Chatbot from '../components/Chatbot';
+import ChatModal from '../components/ChatModal';
 import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 
@@ -48,6 +49,9 @@ function TenantPage() {
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatbotRecommendations, setChatbotRecommendations] = useState([]);
   const [chatbotPreferences, setChatbotPreferences] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [selectedHouseForChat, setSelectedHouseForChat] = useState(null);
+  const [houseMessageCounts, setHouseMessageCounts] = useState({});
 
   useEffect(() => {
     if (!currentUser) return;
@@ -142,7 +146,7 @@ function TenantPage() {
     const fetchTenantLocation = async () => {
       if (currentUser) {
         try {
-          
+
           const userDocRef = doc(db, 'users', currentUser.uid);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -170,6 +174,46 @@ function TenantPage() {
     };
 
     fetchTenantLocation();
+  }, [currentUser]);
+
+  // Track unread messages per house for tenant
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const q = query(
+      collection(db, 'messages'),
+      where('receiverId', '==', currentUser.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Group messages by houseId and count unread ones
+      const counts = {};
+      messages.forEach(msg => {
+        const houseId = msg.houseId;
+        if (!counts[houseId]) {
+          counts[houseId] = 0;
+        }
+
+        // Check if message is unread (no last read time for this specific house)
+        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadTimestamp = localStorage.getItem(lastReadKey);
+        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+
+        if (msgTime > lastReadTime) {
+          counts[houseId] += 1;
+        }
+      });
+
+      setHouseMessageCounts(counts);
+    });
+
+    return () => unsubscribe();
   }, [currentUser]);
 
   // Generate AI recommendations
@@ -299,8 +343,16 @@ function TenantPage() {
   };
 
   const handleChat = (house) => {
-    // Implement chat functionality
-    toast.success(`Chat initiated with ${house.landlordName}`);
+    setSelectedHouseForChat(house);
+    setShowChatModal(true);
+    // Mark messages as read for this specific house when opening chat
+    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
+    localStorage.setItem(lastReadKey, new Date().toISOString());
+    // Update local state to clear the badge
+    setHouseMessageCounts(prev => ({
+      ...prev,
+      [house.id]: 0
+    }));
   };
 
   const handlePayment = (house) => {
@@ -466,6 +518,7 @@ function TenantPage() {
                         onChat={() => handleChat(house)}
                         onPayment={() => handlePayment(house)}
                         isDarkMode={isDarkMode}
+                        messageCount={houseMessageCounts[house.id] || 0}
                       />
                     </div>
                   ))}
@@ -492,6 +545,7 @@ function TenantPage() {
                         onChat={() => handleChat(house)}
                         onPayment={() => handlePayment(house)}
                         isDarkMode={isDarkMode}
+                        messageCount={houseMessageCounts[house.id] || 0}
                       />
                     </div>
                   ))}
@@ -528,6 +582,7 @@ function TenantPage() {
                         onChat={() => handleChat(house)}
                         onPayment={() => handlePayment(house)}
                         isDarkMode={isDarkMode}
+                        messageCount={houseMessageCounts[house.id] || 0}
                       />
                     </div>
                   );
@@ -599,6 +654,7 @@ function TenantPage() {
                       onChat={() => handleChat(house)}
                       onPayment={() => handlePayment(house)}
                       isDarkMode={isDarkMode}
+                      messageCount={houseMessageCounts[house.id] || 0}
                     />
                   </div>
                 ))}
@@ -627,6 +683,17 @@ function TenantPage() {
           onClose={() => setShowChatbot(false)}
           isDarkMode={isDarkMode}
           onViewRecommendations={handleViewRecommendations}
+        />
+      )}
+
+      {showChatModal && selectedHouseForChat && (
+        <ChatModal
+          house={selectedHouseForChat}
+          onClose={() => {
+            setShowChatModal(false);
+            setSelectedHouseForChat(null);
+          }}
+          isDarkMode={isDarkMode}
         />
       )}
 
