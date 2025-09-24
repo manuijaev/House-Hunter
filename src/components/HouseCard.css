@@ -18,6 +18,11 @@
   border-color: #e74c3c;
 }
 
+.house-card.recommended {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
 .house-image {
   position: relative;
   height: 250px;
@@ -107,6 +112,21 @@
   top: 1rem;
   right: 1rem;
   background: rgba(231, 76, 60, 0.9);
+  color: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 3;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.ai-recommended-badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: #667eea;
   color: white;
   padding: 0.3rem 0.8rem;
   border-radius: 20px;

@@ -366,65 +366,39 @@ function TenantPage() {
       </header>
 
       <div className="dashboard-content">
-        {chatbotRecommendations.length === 0 && (
-          <div className="search-section">
-            <div className="search-container">
-              <div className="search-input-wrapper">
-                <Search size={20} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search by location (e.g., Westlands, Nairobi)"
-                  value={searchLocation}
-                  onChange={(e) => setSearchLocation(e.target.value)}
-                  className="search-input"
-                />
-              </div>
+        <div className="search-section">
+          <div className="search-container">
+            <div className="search-input-wrapper">
+              <Search size={20} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search by location (e.g., Westlands, Nairobi)"
+                value={searchLocation}
+                onChange={(e) => setSearchLocation(e.target.value)}
+                className="search-input"
+              />
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Show chatbot recommendations or main properties */}
-        {chatbotRecommendations.length > 0 ? (
-          <div className="ai-recommendations-section">
-            <div className="section-header">
-              <div className="header-info">
-                <h2>AI RECOMMENDATIONS</h2>
-                <p>Personalized matches from AI Assistant</p>
+        <div className="houses-section">
+          <div className="section-header">
+            <div className="header-info">
+              <h2>Available Properties</h2>
+              <p>{filteredHouses.length} properties found</p>
+            </div>
+            {chatbotRecommendations.length > 0 && chatbotPreferences && (
+              <div className="ai-preferences">
+                <span>AI Recommendations for: {chatbotPreferences.location}</span>
+                <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
               </div>
-              {chatbotPreferences && (
-                <div className="ai-preferences">
-                  <span>{chatbotPreferences.location}</span>
-                  <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
-                </div>
-              )}
-            </div>
-
-            <div className="houses-grid">
-              {chatbotRecommendations.map(house => (
-                <div key={`chatbot-${house.id}`} className="house-card-container">
-                  <HouseCard
-                    house={house}
-                    userType="tenant"
-                    onChat={() => handleChat(house)}
-                    onPayment={() => handlePayment(house)}
-                    isDarkMode={isDarkMode}
-                    messageCount={houseMessageCounts[house.id] || 0}
-                  />
-                </div>
-              ))}
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="houses-section">
-            <div className="section-header">
-              <div className="header-info">
-                <h2>Available Properties</h2>
-                <p>{filteredHouses.length} properties found</p>
-              </div>
-            </div>
 
-            <div className="houses-grid">
-              {filteredHouses.map(house => (
+          <div className="houses-grid">
+            {filteredHouses.map(house => {
+              const isRecommended = chatbotRecommendations.some(rec => rec.id === house.id);
+              return (
                 <div
                   key={house.id}
                   id={`house-${house.id}`}
@@ -437,25 +411,26 @@ function TenantPage() {
                     onPayment={() => handlePayment(house)}
                     isDarkMode={isDarkMode}
                     messageCount={houseMessageCounts[house.id] || 0}
+                    isRecommended={isRecommended}
                   />
                 </div>
-              ))}
-            </div>
-
-            {filteredHouses.length === 0 && (
-              <div className="no-houses">
-                <Home size={60} />
-                <h3>No houses found</h3>
-                <p>
-                  {searchLocation
-                    ? `No properties found in "${searchLocation}". Try a different location.`
-                    : 'No available properties at the moment.'
-                  }
-                </p>
-              </div>
-            )}
+              );
+            })}
           </div>
-        )}
+
+          {filteredHouses.length === 0 && (
+            <div className="no-houses">
+              <Home size={60} />
+              <h3>No houses found</h3>
+              <p>
+                {searchLocation
+                  ? `No properties found in "${searchLocation}". Try a different location.`
+                  : 'No available properties at the moment.'
+                }
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {showChatbot && (

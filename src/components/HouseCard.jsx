@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import '../components/HouseCard.css';
 
-function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy, userType, isDarkMode, messageCount = 0 }) {
+function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy, userType, isDarkMode, messageCount = 0, isRecommended = false }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const nextImage = () => {
@@ -33,7 +33,7 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
   };
 
   return (
-    <div className={`house-card ${!house.isVacant ? 'occupied' : ''} ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`house-card ${!house.isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''}`}>
       <div className="house-image">
         {house.images && house.images.length > 0 ? (
           <>
@@ -59,6 +59,9 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
         )}
         {!house.isVacant && (
           <div className="occupied-badge">Occupied</div>
+        )}
+        {isRecommended && (
+          <div className="ai-recommended-badge">AI RECOMMENDED</div>
         )}
         <div className="image-overlay">
         </div>
