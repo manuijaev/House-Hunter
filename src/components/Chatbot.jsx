@@ -13,9 +13,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { OPENAI_API_KEY } from '../config/openai';
+import { useAuth } from '../contexts/AuthContext';
 import './Chatbot.css';
 
 function Chatbot({ houses, onClose, isDarkMode, onViewRecommendations }) {
+  const { userPreferences: globalPreferences, updateUserPreferences, updateUserRecommendations } = useAuth();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -29,8 +31,12 @@ function Chatbot({ houses, onClose, isDarkMode, onViewRecommendations }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Initialize conversation
+  // Initialize conversation and load user preferences
   useEffect(() => {
+    if (globalPreferences) {
+      setUserPreferences(globalPreferences);
+    }
+
     const welcomeMessage = {
       id: Date.now(),
       type: 'bot',
@@ -46,7 +52,7 @@ Just tell me your preferences and I'll find the best matches for you!`,
     };
     setMessages([welcomeMessage]);
     setConversationState('waiting_for_input');
-  }, []);
+  }, [globalPreferences]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -202,23 +208,30 @@ Be strict: only recommend houses that are actually in "${location}" or immediate
 
     // Handle commands
     if (lowerMessage.includes('change location') || lowerMessage.includes('new location')) {
-      setUserPreferences(prev => ({ ...prev, location: null }));
+      const newPrefs = { ...userPreferences, location: null };
+      setUserPreferences(newPrefs);
+      await updateUserPreferences(newPrefs);
       setConversationState('waiting_for_location');
       setShowViewButton(false);
       return `Got it! What location are you interested in? (e.g., "Westlands", "Kilimani", "Karen")`;
     }
 
     if (lowerMessage.includes('change budget') || lowerMessage.includes('new budget')) {
-      setUserPreferences(prev => ({ ...prev, budget: null }));
+      const newPrefs = { ...userPreferences, budget: null };
+      setUserPreferences(newPrefs);
+      await updateUserPreferences(newPrefs);
       setConversationState('waiting_for_budget');
       setShowViewButton(false);
       return `No problem! What's your monthly budget in KES? (e.g., "25000" or "25k")`;
     }
 
     if (lowerMessage.includes('start over') || lowerMessage.includes('reset')) {
-      setUserPreferences({ location: null, budget: null });
+      const newPrefs = { location: null, budget: null };
+      setUserPreferences(newPrefs);
+      await updateUserPreferences(newPrefs);
       setConversationState('waiting_for_input');
       setRecommendations([]);
+      await updateUserRecommendations([]);
       setShowViewButton(false);
       return `Let's start fresh! Where would you like to live and what's your budget?`;
     }
@@ -229,14 +242,19 @@ Be strict: only recommend houses that are actually in "${location}" or immediate
 
     // Handle based on current state and parsed input
     if (!userPreferences.location && location) {
-      setUserPreferences(prev => ({ ...prev, location }));
+      const newPrefs = { ...userPreferences, location };
+      setUserPreferences(newPrefs);
+      await updateUserPreferences(newPrefs);
 
       if (!userPreferences.budget && budget) {
         // Both location and budget provided
-        setUserPreferences(prev => ({ ...prev, budget }));
+        const fullPrefs = { ...newPrefs, budget };
+        setUserPreferences(fullPrefs);
+        await updateUserPreferences(fullPrefs);
         setConversationState('processing');
         const recs = await getAIRecommendations(location, budget);
         setRecommendations(recs);
+        await updateUserRecommendations(recs);
         setShowViewButton(true);
 
         if (recs.length > 0) {
@@ -252,7 +270,9 @@ Be strict: only recommend houses that are actually in "${location}" or immediate
     }
 
     if (!userPreferences.budget && budget) {
-      setUserPreferences(prev => ({ ...prev, budget }));
+      const newPrefs = { ...userPreferences, budget };
+      setUserPreferences(newPrefs);
+      await updateUserPreferences(newPrefs);
 
       if (!userPreferences.location) {
         // Only budget provided, ask for location
@@ -263,6 +283,7 @@ Be strict: only recommend houses that are actually in "${location}" or immediate
         setConversationState('processing');
         const recs = await getAIRecommendations(userPreferences.location, budget);
         setRecommendations(recs);
+        await updateUserRecommendations(recs);
         setShowViewButton(true);
 
         if (recs.length > 0) {
@@ -277,6 +298,7 @@ Be strict: only recommend houses that are actually in "${location}" or immediate
     if (userPreferences.location && userPreferences.budget) {
       const newRecs = await getAIRecommendations(userPreferences.location, userPreferences.budget);
       setRecommendations(newRecs);
+      await updateUserRecommendations(newRecs);
       setShowViewButton(true);
 
       if (newRecs.length > 0) {

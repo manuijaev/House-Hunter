@@ -34,7 +34,7 @@ import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 
 function TenantPage() {
-  const { logout, currentUser } = useAuth();
+  const { logout, currentUser, userPreferences, userRecommendations, updateUserRecommendations } = useAuth();
   const [houses, setHouses] = useState([]);
   const [filteredHouses, setFilteredHouses] = useState([]);
   const [searchLocation, setSearchLocation] = useState('');
@@ -42,8 +42,6 @@ function TenantPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [tenantLocation, setTenantLocation] = useState('');
   const [showChatbot, setShowChatbot] = useState(false);
-  const [chatbotRecommendations, setChatbotRecommendations] = useState([]);
-  const [chatbotPreferences, setChatbotPreferences] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedHouseForChat, setSelectedHouseForChat] = useState(null);
   const [houseMessageCounts, setHouseMessageCounts] = useState({});
@@ -96,18 +94,6 @@ function TenantPage() {
   
 
  
-  useEffect(() => {
-    const savedChatbotRecommendations = localStorage.getItem('chatbot_recommendations');
-    if (savedChatbotRecommendations) {
-      try {
-        const data = JSON.parse(savedChatbotRecommendations);
-        setChatbotRecommendations(data.houses || []);
-        setChatbotPreferences(data.preferences || null);
-      } catch (error) {
-        console.error('Error loading chatbot recommendations:', error);
-      }
-    }
-  }, []);
 
 
 
@@ -271,16 +257,14 @@ function TenantPage() {
   };
 
   // Handle viewing recommendations from chatbot
-  const handleViewRecommendations = (recommendations, preferences) => {
-    setChatbotRecommendations(recommendations);
-    setChatbotPreferences(preferences);
-
-    // Store in localStorage for persistence
-    localStorage.setItem('chatbot_recommendations', JSON.stringify({
-      houses: recommendations,
-      preferences: preferences,
-      timestamp: new Date().toISOString()
-    }));
+  const handleViewRecommendations = async (recommendations, preferences) => {
+    try {
+      await updateUserRecommendations(recommendations);
+      // Note: preferences are handled separately in Chatbot
+    } catch (error) {
+      console.error('Error saving recommendations:', error);
+      toast.error('Failed to save recommendations');
+    }
 
     // Scroll to top after a brief delay to show highlighted recommendations
     setTimeout(() => {
@@ -289,13 +273,16 @@ function TenantPage() {
   };
 
   // Handle clearing chatbot recommendations
-  const handleClearChatbotRecommendations = () => {
-    setChatbotRecommendations([]);
-    setChatbotPreferences(null);
-    localStorage.removeItem('chatbot_recommendations');
-    toast.success('AI recommendations cleared', {
-      duration: 3000
-    });
+  const handleClearChatbotRecommendations = async () => {
+    try {
+      await updateUserRecommendations([]);
+      toast.success('AI recommendations cleared', {
+        duration: 3000
+      });
+    } catch (error) {
+      console.error('Error clearing recommendations:', error);
+      toast.error('Failed to clear recommendations');
+    }
   };
 
   // Scroll to specific house in the main list
@@ -327,7 +314,7 @@ function TenantPage() {
               <MessageCircle size={20} />
               AI Assistant
             </button>
-            {chatbotRecommendations.length > 0 && (
+            {userRecommendations.length > 0 && (
               <button
                 onClick={handleClearChatbotRecommendations}
                 className="clear-recommendations-btn"
@@ -387,17 +374,17 @@ function TenantPage() {
               <h2>Available Properties</h2>
               <p>{filteredHouses.length} properties found</p>
             </div>
-            {chatbotRecommendations.length > 0 && chatbotPreferences && (
+            {userRecommendations.length > 0 && userPreferences && (
               <div className="ai-preferences">
-                <span>AI Recommendations for: {chatbotPreferences.location}</span>
-                <span>Up to {chatbotPreferences.budget?.toLocaleString()} KES</span>
+                <span>AI Recommendations for: {userPreferences.location}</span>
+                <span>Up to {userPreferences.budget?.toLocaleString()} KES</span>
               </div>
             )}
           </div>
 
           <div className="houses-grid">
             {filteredHouses.map(house => {
-              const isRecommended = chatbotRecommendations.some(rec => rec.id === house.id);
+              const isRecommended = userRecommendations.some(rec => rec.id === house.id);
               return (
                 <div
                   key={house.id}

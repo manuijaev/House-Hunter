@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 
 const AuthContext = createContext();
@@ -18,16 +18,18 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userType, setUserType] = useState(null);
+  const [userPreferences, setUserPreferences] = useState(null);
+  const [userRecommendations, setUserRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const signup = async (email, password, userType, userData) => {
+  const signup = async (email, password, userType, userData = {}) => {
     try {
       console.log('Attempting to create user with email:', email);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
       // Set display name for the user
-      const displayName = `${userData.firstName} ${userData.lastName}`;
+      const displayName = userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : email.split('@')[0];
       await updateProfile(user, {
         displayName: displayName
       });
@@ -75,6 +77,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUserPreferences = async (preferences) => {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        preferences: preferences
+      });
+      setUserPreferences(preferences);
+    } catch (error) {
+      console.error('Error updating user preferences:', error);
+      throw error;
+    }
+  };
+
+  const updateUserRecommendations = async (recommendations) => {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        recommendations: recommendations
+      });
+      setUserRecommendations(recommendations);
+    } catch (error) {
+      console.error('Error updating user recommendations:', error);
+      throw error;
+    }
+  };
+
   const fetchUserData = useCallback(async (user) => {
     try {
       console.log('Fetching user data for:', user.uid);
@@ -83,6 +111,8 @@ export const AuthProvider = ({ children }) => {
         const userData = userDoc.data();
         console.log('User data found:', userData);
         setUserType(userData.userType || 'tenant'); // Default to tenant if userType is missing
+        setUserPreferences(userData.preferences || null);
+        setUserRecommendations(userData.recommendations || []);
 
         // Update displayName if it's not set in Firebase Auth but exists in Firestore
         if (!user.displayName && userData.displayName) {
@@ -100,10 +130,14 @@ export const AuthProvider = ({ children }) => {
       } else {
         console.log('No user document found in Firestore, setting default userType');
         setUserType('tenant'); // Default fallback
+        setUserPreferences(null);
+        setUserRecommendations([]);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
       setUserType('tenant'); // Default fallback on error
+      setUserPreferences(null);
+      setUserRecommendations([]);
     }
   }, []);
 
@@ -128,6 +162,8 @@ export const AuthProvider = ({ children }) => {
         console.log('No user, clearing state');
         setCurrentUser(null);
         setUserType(null);
+        setUserPreferences(null);
+        setUserRecommendations([]);
       }
       
       if (isMounted) {
@@ -154,9 +190,13 @@ export const AuthProvider = ({ children }) => {
   const value = {
     currentUser,
     userType,
+    userPreferences,
+    userRecommendations,
     signup,
     login,
     logout,
+    updateUserPreferences,
+    updateUserRecommendations,
     loading
   };
 

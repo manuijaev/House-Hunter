@@ -15,11 +15,7 @@ function LoginPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
-    location: ''
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -81,12 +77,7 @@ const handleSubmit = async (e) => {
         return;
       }
 
-      const userCredential = await signup(formData.email, formData.password, userType, {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        location: formData.location,
-      });
+      const userCredential = await signup(formData.email, formData.password, userType);
 
       console.log("Signup success:", userCredential.user.uid);
       toast.success("Account created successfully!");
@@ -202,56 +193,6 @@ const handleSubmit = async (e) => {
               />
             </div>
 
-            {!isLogin && (
-              <>
-                <div className="form-row">
-                  <div className="form-group">
-                    <input
-                      type="text"
-                      name="firstName"
-                      placeholder="First Name"
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <input
-                      type="text"
-                      name="lastName"
-                      placeholder="Last Name"
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <Phone size={20} className="input-icon" />
-                  <input
-                    type="tel"
-                    name="phone"
-                    placeholder="Phone Number"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <MapPin size={20} className="input-icon" />
-                  <input
-                    type="text"
-                    name="location"
-                    placeholder="Location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-              </>
-            )}
 
             <div className="form-group">
               <Key size={20} className="input-icon" />
