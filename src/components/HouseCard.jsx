@@ -9,7 +9,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Phone,
-  Mail
+  Mail,
+  House
 } from 'lucide-react';
 import '../components/HouseCard.css';
 
@@ -82,6 +83,12 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
             <span>{house.location}</span>
           </div>
           
+        <div className="house-details">
+         <div className="detail-item">
+            <House size={16} />
+            <span>{house.size}</span>
+         </div>
+
           <div className="detail-item">
             <User size={16} />
             <span>{house.landlordName}</span>
@@ -183,6 +190,7 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

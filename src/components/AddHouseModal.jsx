@@ -6,7 +6,8 @@ import {
   MapPin,
   FileText,
   Camera,
-  User
+  User,
+  House
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { saveImageToLocalStorage, removeImageFromLocalStorage } from '../utils/LocalStorage';
@@ -204,8 +205,19 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
               <input
                 type="text"
                 name="title"
-                placeholder="House Title (e.g., 3 Bedroom Apartment)"
+                placeholder="House Title (e.g., pendo home)"
                 value={formData.title}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <House size={20} className="input-icon" />
+              <input
+                type="text"
+                name="size"
+                placeholder="House Size (e.g., 2 bedroom)"
+                value={formData.size}
                 onChange={handleInputChange}
                 required
               />
@@ -319,7 +331,9 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
             <div className="image-upload">
               <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
                 <Camera size={40} />
-                <p>Click to upload images</p>
+                <p>Click to upload images
+                  <br />
+              Only JPEG,JPG and PNG images are allowed. Please upload a valid image.</p>
               </div>
               <input
                 ref={fileInputRef}

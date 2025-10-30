@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   collection,
@@ -79,26 +78,23 @@ function TenantPage() {
     }
   }, []);
 
+  // ------------ UPDATED: filter by title OR location ------------
   useEffect(() => {
     let housesToDisplay = houses;
 
-
     if (searchLocation.trim() !== '') {
-      housesToDisplay = houses.filter(house =>
-        house.location.toLowerCase().includes(searchLocation.toLowerCase())
-      );
+      const term = searchLocation.toLowerCase();
+      housesToDisplay = houses.filter(house => {
+        const titleMatch = house.title && house.title.toLowerCase().includes(term);
+        const locationMatch = house.location && house.location.toLowerCase().includes(term);
+        return titleMatch || locationMatch;
+      });
     }
 
     setFilteredHouses(housesToDisplay);
   }, [searchLocation, houses]);
+  // -------------------------------------------------------------
 
-  
-
- 
-
-
-
-  
   useEffect(() => {
     const fetchTenantLocation = async () => {
       if (currentUser) {
@@ -259,38 +255,38 @@ function TenantPage() {
 
   // Handle viewing recommendations from chatbot
   // Handle viewing recommendations from chatbot
-const handleViewRecommendations = async (recommendations, preferences) => {
-  try {
-    await updateUserRecommendations(recommendations);
-    setAiRecommendedIds(recommendations.map(r => r.id)); // ✅ dynamically store them
-    
-    // Optional: Auto-filter to show only recommendations
-    // setFilteredHouses(recommendations);
-    
-  } catch (error) {
-    console.error('Error saving recommendations:', error);
-    toast.error('Failed to save recommendations');
-  }
+  const handleViewRecommendations = async (recommendations, preferences) => {
+    try {
+      await updateUserRecommendations(recommendations);
+      setAiRecommendedIds(recommendations.map(r => r.id)); // ✅ dynamically store them
 
-  setTimeout(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, 500);
-};
+      // Optional: Auto-filter to show only recommendations
+      // setFilteredHouses(recommendations);
+
+    } catch (error) {
+      console.error('Error saving recommendations:', error);
+      toast.error('Failed to save recommendations');
+    }
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 500);
+  };
 
   // Handle clearing chatbot recommendations
   const handleClearChatbotRecommendations = async () => {
-  try {
-    await updateUserRecommendations([]);
-    setAiRecommendedIds([]); // ✅ Clear local state immediately
-    setFilteredHouses(houses); // ✅ Reset any filtering
-    toast.success('AI recommendations cleared', {
-      duration: 3000
-    });
-  } catch (error) {
-    console.error('Error clearing recommendations:', error);
-    toast.error('Failed to clear recommendations');
-  }
-};
+    try {
+      await updateUserRecommendations([]);
+      setAiRecommendedIds([]); // ✅ Clear local state immediately
+      setFilteredHouses(houses); // ✅ Reset any filtering
+      toast.success('AI recommendations cleared', {
+        duration: 3000
+      });
+    } catch (error) {
+      console.error('Error clearing recommendations:', error);
+      toast.error('Failed to clear recommendations');
+    }
+  };
 
   // Scroll to specific house in the main list
   const scrollToHouse = (houseId) => {
@@ -331,6 +327,20 @@ const handleViewRecommendations = async (recommendations, preferences) => {
                 Clear AI
               </button>
             )}
+
+            <div className="search-container" style={{ marginLeft: '10px', marginRight: '10px' }}>
+              <div className="search-input-wrapper">
+                <Search size={20} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search by title or location (e.g., 2-bed Westlands)"
+                  value={searchLocation}
+                  onChange={(e) => setSearchLocation(e.target.value)}
+                  className="search-input"
+                />
+              </div>
+            </div>
+
             <button onClick={toggleTheme} className="theme-btn">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -370,6 +380,7 @@ const handleViewRecommendations = async (recommendations, preferences) => {
                 value={searchLocation}
                 onChange={(e) => setSearchLocation(e.target.value)}
                 className="search-input"
+                style={{ display: 'none' }} // kept for backward compatibility but hidden since header search is primary
               />
             </div>
           </div>
@@ -416,7 +427,7 @@ const handleViewRecommendations = async (recommendations, preferences) => {
               <h3>No houses found</h3>
               <p>
                 {searchLocation
-                  ? `No properties found in "${searchLocation}". Try a different location.`
+                  ? `No properties found matching "${searchLocation}". Try a different title or location.`
                   : 'No available properties at the moment.'
                 }
               </p>
