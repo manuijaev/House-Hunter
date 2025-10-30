@@ -286,7 +286,84 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* Add to your existing Chatbot.css */
 
+.chatbot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chatbot-header.dark {
+  border-bottom-color: #374151;
+}
+
+.chatbot-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.delete-conversation-btn {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-conversation-btn:hover {
+  background-color: #f3f4f6;
+  color: #ef4444;
+}
+
+.dark .delete-conversation-btn:hover {
+  background-color: #374151;
+  color: #fca5a5;
+}
+
+/* Ensure messages appear immediately with smooth transitions */
+.message {
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.message.user {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.message.bot {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes slideUp {
   from {
     opacity: 0;

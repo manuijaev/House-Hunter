@@ -393,12 +393,14 @@ function LandlordDashboard() {
                 <div key={house.id} className="house-card-container">
                   <HouseCard
                     house={house}
-                    userType="landlord"
-                    onEdit={() => setEditingHouse(house)}
-                    onDelete={() => handleDeleteHouse(house.id)}
-                    onToggleVacancy={(isVacant) => toggleVacancy(house.id, isVacant)}
+                    userType="tenant"
+                    onChat={() => handleChat(house)}
+                    onPayment={() => handlePayment(house)}
                     isDarkMode={isDarkMode}
+                    messageCount={houseMessageCounts[house.id] || 0}
+                    isRecommended={aiRecommendedIds.includes(house.id)}
                   />
+
                 </div>
               ))}
             </div>

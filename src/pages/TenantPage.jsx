@@ -45,6 +45,7 @@ function TenantPage() {
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedHouseForChat, setSelectedHouseForChat] = useState(null);
   const [houseMessageCounts, setHouseMessageCounts] = useState({});
+  const [aiRecommendedIds, setAiRecommendedIds] = useState([]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -257,33 +258,39 @@ function TenantPage() {
   };
 
   // Handle viewing recommendations from chatbot
-  const handleViewRecommendations = async (recommendations, preferences) => {
-    try {
-      await updateUserRecommendations(recommendations);
-      // Note: preferences are handled separately in Chatbot
-    } catch (error) {
-      console.error('Error saving recommendations:', error);
-      toast.error('Failed to save recommendations');
-    }
+  // Handle viewing recommendations from chatbot
+const handleViewRecommendations = async (recommendations, preferences) => {
+  try {
+    await updateUserRecommendations(recommendations);
+    setAiRecommendedIds(recommendations.map(r => r.id)); // ✅ dynamically store them
+    
+    // Optional: Auto-filter to show only recommendations
+    // setFilteredHouses(recommendations);
+    
+  } catch (error) {
+    console.error('Error saving recommendations:', error);
+    toast.error('Failed to save recommendations');
+  }
 
-    // Scroll to top after a brief delay to show highlighted recommendations
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 500);
-  };
+  setTimeout(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 500);
+};
 
   // Handle clearing chatbot recommendations
   const handleClearChatbotRecommendations = async () => {
-    try {
-      await updateUserRecommendations([]);
-      toast.success('AI recommendations cleared', {
-        duration: 3000
-      });
-    } catch (error) {
-      console.error('Error clearing recommendations:', error);
-      toast.error('Failed to clear recommendations');
-    }
-  };
+  try {
+    await updateUserRecommendations([]);
+    setAiRecommendedIds([]); // ✅ Clear local state immediately
+    setFilteredHouses(houses); // ✅ Reset any filtering
+    toast.success('AI recommendations cleared', {
+      duration: 3000
+    });
+  } catch (error) {
+    console.error('Error clearing recommendations:', error);
+    toast.error('Failed to clear recommendations');
+  }
+};
 
   // Scroll to specific house in the main list
   const scrollToHouse = (houseId) => {
@@ -383,27 +390,25 @@ function TenantPage() {
           </div>
 
           <div className="houses-grid">
-            {filteredHouses.map(house => {
-              const isRecommended = userRecommendations.some(rec => rec.id === house.id);
-              return (
-                <div
-                  key={house.id}
-                  id={`house-${house.id}`}
-                  className="house-card-container"
-                >
-                  <HouseCard
-                    house={house}
-                    userType="tenant"
-                    onChat={() => handleChat(house)}
-                    onPayment={() => handlePayment(house)}
-                    isDarkMode={isDarkMode}
-                    messageCount={houseMessageCounts[house.id] || 0}
-                    isRecommended={isRecommended}
-                  />
-                </div>
-              );
-            })}
+            {filteredHouses.map(house => (
+              <div
+                key={house.id}
+                id={`house-${house.id}`}
+                className="house-card-container"
+              >
+                <HouseCard
+                  house={house}
+                  userType="tenant"
+                  onChat={() => handleChat(house)}
+                  onPayment={() => handlePayment(house)}
+                  isDarkMode={isDarkMode}
+                  messageCount={houseMessageCounts[house.id] || 0}
+                  isRecommended={aiRecommendedIds.includes(house.id)} // ✅ consistent logic
+                />
+              </div>
+            ))}
           </div>
+
 
           {filteredHouses.length === 0 && (
             <div className="no-houses">

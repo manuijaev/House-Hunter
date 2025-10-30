@@ -435,6 +435,53 @@
 .house-card.dark .delete-btn:hover {
   background: #c0392b;
 }
+GLOWING BORDER FOR AI RECOMMENDED HOUSES */
+.house-card.recommended {
+  position: relative;
+  border-radius: 14px;
+  padding: 3px;
+  background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #ffd93d);
+  background-size: 400% 400%;
+  animation: gradientGlow 3s ease infinite;
+}
+
+.house-card.recommended::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: inherit;
+  border-radius: 16px;
+  z-index: -1;
+  animation: gradientGlow 3s ease infinite;
+  filter: blur(10px);
+  opacity: 0.7;
+}
+
+.house-card.recommended > .house-image,
+.house-card.recommended > .house-content {
+  border-radius: 12px;
+  background: white;
+}
+
+.dark .house-card.recommended > .house-image,
+.dark .house-card.recommended > .house-content {
+  background: #1f2937;
+}
+
+@keyframes gradientGlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
 
 @media (max-width: 480px) {
   .house-footer {
