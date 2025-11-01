@@ -3,14 +3,12 @@ import {
   collection,
   query,
   onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   doc,
   where
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
+import { djangoAPI } from '../services/djangoAPI'; // ADD THIS IMPORT
 import { clearAllImagesFromLocalStorage } from '../utils/LocalStorage';
 import {
   Plus,
@@ -40,35 +38,31 @@ function LandlordDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-
+  const [houseMessageCounts, setHouseMessageCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+  console.log('🔄 handleUpdateHouse defined:', typeof handleUpdateHouse);
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(
-      collection(db, 'houses'),
-      where('landlordId', '==', currentUser.uid)
-    );
+    const fetchMyHouses = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching landlord houses from Django API...');
+        
+        const housesData = await djangoAPI.getMyHouses();
+        console.log('🎯 Django houses loaded:', housesData);
+        
+        setHouses(housesData);
+      } catch (error) {
+        console.error('LandlordDashboard: Django API error:', error);
+        toast.error('Failed to load your houses');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const housesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setHouses(housesData);
-    }, (error) => {
-      console.error('LandlordDashboard: Firestore error:', error);
-    });
-
-    return () => unsubscribe();
+    fetchMyHouses();
   }, [currentUser]);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    }
-  }, []);
-
 
   // Track unread messages for landlord and show notifications
   useEffect(() => {
@@ -131,46 +125,87 @@ function LandlordDashboard() {
   const handleAddHouse = async (houseData) => {
     try {
       console.log('handleAddHouse called with data:', houseData);
-      console.log('Current user:', currentUser);
 
-      const houseWithLandlord = {
-        ...houseData,
-        landlordId: currentUser.uid,
-        landlordName: houseData.displayName || currentUser.displayName || 'Landlord',
-        createdAt: new Date().toISOString(),
-        isVacant: true
-      };
+      // Use Django API instead of Firestore
+      const response = await djangoAPI.createHouse(houseData);
+      console.log('House submitted to Django successfully:', response);
 
-      console.log('House data to save:', houseWithLandlord);
-      await addDoc(collection(db, 'houses'), houseWithLandlord);
-      console.log('House saved to Firestore successfully');
-
-      toast.success('House added successfully!');
+      // Show different message since it needs approval
+      toast.success('House submitted for admin approval! 🎯');
       setShowAddModal(false);
+
+      // Refresh the houses list to show the new pending house
+      const updatedHouses = await djangoAPI.getMyHouses();
+      setHouses(updatedHouses);
     } catch (error) {
-      console.error('Error adding house:', error);
-      toast.error('Error adding house: ' + error.message);
+      console.error('Error adding house to Django:', error);
+      toast.error('Failed to submit house: ' + error.message);
     }
   };
 
+  // 🎯 ADD MISSING HANDLER FUNCTIONS
+  const handleEdit = (house) => {
+    console.log('Editing house:', house);
+    setEditingHouse(house);
+    setShowAddModal(true);
+  };
+ 
+  const handleDeleteHouse = async (houseId) => {
+    if (window.confirm('Are you sure you want to delete this house?')) {
+      try {
+        console.log('Deleting house:', houseId);
+
+        // Use Django API instead of Firestore
+        await djangoAPI.deleteHouse(houseId);
+        toast.success('House deleted successfully!');
+
+        // Refresh houses list
+        const updatedHouses = await djangoAPI.getMyHouses();
+        setHouses(updatedHouses);
+      } catch (error) {
+        console.error('Error deleting house:', error);
+        toast.error('Error deleting house: ' + error.message);
+      }
+    }
+  };
+  // 🎯 ADD THIS EXACT FUNCTION - IT'S MISSING FROM YOUR CODE
   const handleUpdateHouse = async (houseId, updates) => {
     try {
-      await updateDoc(doc(db, 'houses', houseId), updates);
+      console.log('🔄 UPDATE HOUSE CALLED:');
+      console.log('House ID:', houseId);
+      console.log('Updates data:', updates);
+
+      // Use Django API instead of Firestore
+      const response = await djangoAPI.updateHouse(houseId, updates);
+      console.log('✅ Django update response:', response);
+
       toast.success('House updated successfully!');
       setEditingHouse(null);
+
+      // Refresh houses list
+      const updatedHouses = await djangoAPI.getMyHouses();
+      setHouses(updatedHouses);
     } catch (error) {
+      console.error('❌ Error updating house:', error);
       toast.error('Error updating house: ' + error.message);
     }
   };
 
-  const handleDeleteHouse = async (houseId) => {
-    if (window.confirm('Are you sure you want to delete this house?')) {
-      try {
-        await deleteDoc(doc(db, 'houses', houseId));
-        toast.success('House deleted successfully!');
-      } catch (error) {
-        toast.error('Error deleting house: ' + error.message);
-      }
+  // 🎯 ADD MISSING TOGGLE VACANCY FUNCTION
+  const handleToggleVacancy = async (houseId, isVacant) => {
+    try {
+      console.log('Toggling vacancy for house:', houseId, 'to:', isVacant);
+      
+      const numericHouseId = parseInt(houseId);
+      await djangoAPI.toggleVacancy(numericHouseId, isVacant);
+      toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
+      
+      // Refresh houses list
+      const updatedHouses = await djangoAPI.getMyHouses();
+      setHouses(updatedHouses);
+    } catch (error) {
+      console.error('Error updating house status:', error);
+      toast.error('Error updating house status: ' + error.message);
     }
   };
 
@@ -231,15 +266,6 @@ function LandlordDashboard() {
       }
     }
     setShowDropdown(false);
-  };
-
-  const toggleVacancy = async (houseId, isVacant) => {
-    try {
-      await updateDoc(doc(db, 'houses', houseId), { isVacant });
-      toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
-    } catch (error) {
-      toast.error('Error updating house status: ' + error.message);
-    }
   };
 
   return (
@@ -388,24 +414,32 @@ function LandlordDashboard() {
               </div>
             </div>
 
+            {/* Loading state */}
+            {loading && (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Loading your houses...</p>
+              </div>
+            )}
+
             <div className="houses-grid">
               {houses.map(house => (
                 <div key={house.id} className="house-card-container">
                   <HouseCard
                     house={house}
-                    userType="tenant"
-                    onChat={() => handleChat(house)}
-                    onPayment={() => handlePayment(house)}
+                    userType="landlord"  // 🎯 CHANGED FROM "tenant" TO "landlord"
+                    onEdit={handleEdit}  // 🎯 ADDED
+                    onDelete={handleDeleteHouse}  // 🎯 ADDED
+                    onToggleVacancy={handleToggleVacancy}  // 🎯 ADDED
                     isDarkMode={isDarkMode}
                     messageCount={houseMessageCounts[house.id] || 0}
-                    isRecommended={aiRecommendedIds.includes(house.id)}
+                    // 🎯 REMOVED tenant-only props: onChat, onPayment, isRecommended
                   />
-
                 </div>
               ))}
             </div>
 
-            {houses.length === 0 && (
+            {houses.length === 0 && !loading && (
               <div className="no-houses">
                 <Home size={60} />
                 <h3>No houses listed yet</h3>
@@ -476,13 +510,16 @@ function LandlordDashboard() {
         <AddHouseModal
           house={editingHouse}
           onClose={() => setEditingHouse(null)}
-          onSave={(data) => handleUpdateHouse(editingHouse.id, data)}
+          onSave={(data) => {
+            console.log('📝 Edit modal onSave called with data:', data);
+            handleUpdateHouse(editingHouse.id, data);
+          }}
           isDarkMode={isDarkMode}
         />
       )}
+    
     </div>
   );
 }
 
 export default LandlordDashboard;
-
