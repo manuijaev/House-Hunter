@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MapPin,
   MessageCircle,
@@ -14,31 +14,79 @@ import {
 } from 'lucide-react';
 import '../components/HouseCard.css';
 
-function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy, userType, isDarkMode, messageCount = 0, isRecommended = false }) {
+function HouseCard({
+  house,
+  onPayment,
+  onChat,
+  onEdit,
+  onDelete,
+  onToggleVacancy,
+  userType,
+  isDarkMode,
+  messageCount = 0,
+  isRecommended = false
+}) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isVacant, setIsVacant] = useState(house.isVacant);
+
+  // Update local state when house prop changes
+  useEffect(() => {
+    console.log('🏠 House prop updated for house:', house.id, 'isVacant:', house.isVacant);
+    setIsVacant(house.isVacant);
+  }, [house.isVacant]);
 
   const nextImage = () => {
+    if (!house.images || house.images.length <= 1) return;
     setCurrentImageIndex((prev) => (prev + 1) % house.images.length);
   };
 
   const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + house.images.length) % house.images.length);
+    if (!house.images || house.images.length <= 1) return;
+    setCurrentImageIndex(
+      (prev) => (prev - 1 + house.images.length) % house.images.length
+    );
   };
 
-
   const formatPrice = (price) => {
+    if (price == null || isNaN(price)) return 'N/A';
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: 'KES'
     }).format(price);
   };
 
+  // ✅ Local update to keep vacancy button responsive
+  const handleVacancyToggle = () => {
+    console.log('🏠 HouseCard toggle clicked for house:', house.id, 'current isVacant:', isVacant, 'house.isVacant:', house.isVacant);
+    const newVacant = !isVacant;
+    console.log('🏠 New vacancy state will be:', newVacant);
+    setIsVacant(newVacant); // Update local state immediately for UI responsiveness
+    if (onToggleVacancy) {
+      console.log('🏠 Calling onToggleVacancy with:', house.id, newVacant);
+      onToggleVacancy(house.id, newVacant);
+    } else {
+      console.log('🏠 onToggleVacancy is not defined!');
+    }
+  };
+  const approvalStatus = house.approval_status || 'pending';
+
+
   return (
-    <div className={`house-card ${!house.isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''}`}>
+    <div
+      className={`house-card ${!isVacant ? 'occupied' : ''} ${
+        isRecommended ? 'recommended' : ''
+      } ${isDarkMode ? 'dark' : ''}`}
+    >
       <div className="house-image">
         {house.images && house.images.length > 0 ? (
           <>
-            <img src={house.images[currentImageIndex].url || house.images[currentImageIndex]} alt={house.title} />
+            <img
+              src={
+                house.images[currentImageIndex]?.url ||
+                house.images[currentImageIndex]
+              }
+              alt={house.title || 'House'}
+            />
             {house.images.length > 1 && (
               <>
                 <button className="image-nav-btn prev-btn" onClick={prevImage}>
@@ -58,14 +106,25 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
             <Home size={40} />
           </div>
         )}
-        {!house.isVacant && (
-          <div className="occupied-badge">Occupied</div>
+
+        {/* ✅ Approval Status Badge - Show for landlords */}
+        {userType === 'landlord' && (
+          <div
+            className={`approval-badge ${approvalStatus}`}
+            title={`Status: ${approvalStatus}`}
+          >
+            {approvalStatus === 'approved'
+              ? 'Approved'
+              : approvalStatus === 'rejected'
+              ? 'Rejected'
+              : 'Pending'}
+          </div>
         )}
+
+        {!isVacant && <div className="occupied-badge">Occupied</div>}
         {isRecommended && (
           <div className="ai-recommended-badge">AI RECOMMENDED</div>
         )}
-        <div className="image-overlay">
-        </div>
       </div>
 
       <div className="house-content">
@@ -82,16 +141,15 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
             <MapPin size={16} />
             <span>{house.location}</span>
           </div>
-          
-        <div className="house-details">
-         <div className="detail-item">
+
+          <div className="detail-item">
             <House size={16} />
-            <span>{house.size}</span>
-         </div>
+            <span>{house.size || 'N/A'}</span>
+          </div>
 
           <div className="detail-item">
             <User size={16} />
-            <span>{house.landlordName}</span>
+            <span>{house.landlordName || 'Unknown'}</span>
           </div>
 
           <div className="detail-item">
@@ -122,10 +180,12 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
         <div className="house-footer">
           <div className="deposit-info">
             <span className="deposit-label">Deposit:</span>
-            <span className="deposit-amount">{formatPrice(house.deposit)}</span>
+            <span className="deposit-amount">
+              {formatPrice(house.deposit)}
+            </span>
           </div>
 
-          {userType === 'tenant' && house.isVacant && (
+          {userType === 'tenant' && isVacant && (
             <div className="action-buttons">
               <button
                 className="chat-btn"
@@ -149,14 +209,14 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '11px',
-                      fontWeight: 'bold',
+                      fontWeight: 'bold'
                     }}
                   >
                     {messageCount > 99 ? '99+' : messageCount}
                   </span>
                 )}
               </button>
-              <button 
+              <button
                 className="payment-btn"
                 onClick={() => onPayment(house)}
               >
@@ -168,19 +228,19 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
 
           {userType === 'landlord' && (
             <div className="landlord-actions">
-              <button 
+              <button
                 className="toggle-vacancy-btn"
-                onClick={() => onToggleVacancy && onToggleVacancy(house.id, !house.isVacant)}
+                onClick={handleVacancyToggle}
               >
-                {house.isVacant ? 'Mark Occupied' : 'Mark Vacant'}
+                {isVacant ? 'Mark Occupied' : 'Mark Vacant'}
               </button>
-              <button 
+              <button
                 className="edit-btn"
                 onClick={() => onEdit && onEdit(house)}
               >
                 Edit
               </button>
-              <button 
+              <button
                 className="delete-btn"
                 onClick={() => onDelete && onDelete(house.id)}
               >
@@ -190,7 +250,6 @@ function HouseCard({ house, onPayment, onChat, onEdit, onDelete, onToggleVacancy
           )}
         </div>
       </div>
-    </div>
     </div>
   );
 }

@@ -28,7 +28,6 @@ import AddHouseModal from '../components/AddHouseModal';
 import LandlordChats from '../components/LandlordChats';
 import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
-import { fetchLandlordHouses, toggleVacancy } from "../api/houseApi";
 
 function LandlordDashboard() {
   const { logout, currentUser } = useAuth();
@@ -118,10 +117,11 @@ function LandlordDashboard() {
   }, [currentUser]);
 
   const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    const newTheme = isDarkMode ? 'light' : 'dark';
+    setIsDarkMode(!isDarkMode);
+    localStorage.setItem('theme', newTheme);
   };
+
 
   const handleAddHouse = async (houseData) => {
     try {
@@ -193,22 +193,32 @@ function LandlordDashboard() {
   };
 
   // 🎯 ADD MISSING TOGGLE VACANCY FUNCTION
-  const handleToggleVacancy = async (houseId, isVacant) => {
-    try {
-      console.log('Toggling vacancy for house:', houseId, 'to:', isVacant);
-      
-      const numericHouseId = parseInt(houseId);
-      await djangoAPI.toggleVacancy(numericHouseId, isVacant);
-      toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
-      
-      // Refresh houses list
-      const updatedHouses = await djangoAPI.getMyHouses();
-      setHouses(updatedHouses);
-    } catch (error) {
-      console.error('Error updating house status:', error);
-      toast.error('Error updating house status: ' + error.message);
+// Toggles house vacancy and updates the backend
+const handleToggleVacancy = async (houseId, isVacant) => {
+  try {
+    // Send update request to Django backend
+    const response = await djangoAPI.toggleVacancy(houseId, isVacant);
+    
+    if (!response.ok) {
+      throw new Error('Failed to update vacancy status');
     }
-  };
+
+    // Optimistically update local UI
+    setHouses(prev =>
+      prev.map(h =>
+        h.id === houseId ? { ...h, isVacant } : h
+      )
+    );
+
+    toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
+  } catch (error) {
+    console.error('Error updating vacancy:', error);
+    toast.error('Could not update vacancy status');
+  }
+};
+
+
+
 
   const handleLogout = async () => {
     try {

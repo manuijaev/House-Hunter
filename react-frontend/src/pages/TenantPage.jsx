@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
+import { djangoAPI } from '../services/djangoAPI';
 import {
   Search,
   LogOut,
@@ -46,29 +47,26 @@ function TenantPage() {
   const [houseMessageCounts, setHouseMessageCounts] = useState({});
   const [aiRecommendedIds, setAiRecommendedIds] = useState([]);
 
+  // Fetch houses from Django API (approved and vacant only)
   useEffect(() => {
-    if (!currentUser) return;
+    const fetchHouses = async () => {
+      try {
+        const housesData = await djangoAPI.getHouses(); // This returns only approved + vacant houses
+        console.log('Loaded houses from Django:', housesData.length);
+        setHouses(Array.isArray(housesData) ? housesData : []);
+        setFilteredHouses(Array.isArray(housesData) ? housesData : []);
+      } catch (error) {
+        console.error('TenantPage: Django API error:', error);
+      }
+    };
 
-    const q = query(
-      collection(db, 'houses'),
-      where('isVacant', '==', true)
-    );
+    fetchHouses();
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const housesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+    // Auto-refresh every 5 seconds to show admin approval updates
+    const interval = setInterval(fetchHouses, 5000);
 
-      console.log('Loaded houses:', housesData.length);
-      setHouses(housesData);
-      setFilteredHouses(housesData);
-    }, (error) => {
-      console.error('TenantPage: Firestore error:', error);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
+    return () => clearInterval(interval);
+  }, []);
 
 
   useEffect(() => {

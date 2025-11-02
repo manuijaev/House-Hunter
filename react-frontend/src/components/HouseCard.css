@@ -137,6 +137,36 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.approval-badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 3;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.approval-badge.approved {
+  background: rgba(39, 174, 96, 0.9);
+  color: white;
+}
+
+.approval-badge.pending {
+  background: rgba(243, 156, 18, 0.9);
+  color: white;
+}
+
+.approval-badge.rejected {
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
+}
+
 .image-overlay {
   position: absolute;
   bottom: 1rem;
