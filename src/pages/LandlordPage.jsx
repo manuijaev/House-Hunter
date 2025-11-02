@@ -28,6 +28,7 @@ import AddHouseModal from '../components/AddHouseModal';
 import LandlordChats from '../components/LandlordChats';
 import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
+import { fetchLandlordHouses, toggleVacancy } from "../api/houseApi";
 
 function LandlordDashboard() {
   const { logout, currentUser } = useAuth();
