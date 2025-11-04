@@ -27,9 +27,14 @@ class HouseSerializer(serializers.ModelSerializer):
         ]
 
     # ✅ Handle vacancy toggling cleanly
-    def update(self, instance, validated_data):
-        is_vacant_data = validated_data.pop('is_vacant', None)
-        if is_vacant_data is not None:
-            instance.is_vacant = is_vacant_data
+def update(self, instance, validated_data):
+    # ✅ Support both naming conventions
+    is_vacant_data = (
+        validated_data.pop('is_vacant', None)
+        or validated_data.pop('isVacant', None)
+    )
+    if is_vacant_data is not None:
+        instance.is_vacant = is_vacant_data
 
-        return super().update(instance, validated_data)
+    return super().update(instance, validated_data)
+

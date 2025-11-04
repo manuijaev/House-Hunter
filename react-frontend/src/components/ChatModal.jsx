@@ -8,6 +8,7 @@ import {
   onSnapshot,
   deleteDoc,
   getDocs,
+  getDoc,
   serverTimestamp,
   where,
 } from "firebase/firestore";
@@ -25,10 +26,14 @@ function ChatModal({ house, onClose, isDarkMode }) {
   useEffect(() => {
     if (!house || !currentUser) return;
 
+    // Mark messages as read when chat modal opens
+    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
+    localStorage.setItem(lastReadKey, new Date().toISOString());
+
+    // Query without orderBy first to avoid index requirement, then sort manually
     const q = query(
       collection(db, "messages"),
-      where("houseId", "==", house.id),
-      orderBy("timestamp", "asc")
+      where("houseId", "==", house.id)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -37,14 +42,38 @@ function ChatModal({ house, onClose, isDarkMode }) {
         ...doc.data(),
       }));
 
-      // Only messages between this tenant and this landlord
+      // Only messages between this tenant and this landlord (by email)
+      const landlordEmail = house.contactEmail || house.landlordEmail;
       const filtered = msgs.filter(
         (m) =>
           (m.senderId === currentUser.uid &&
-            m.receiverId === house.landlordId) ||
-          (m.senderId === house.landlordId &&
+            (m.receiverEmail === landlordEmail || m.receiverId === landlordEmail)) ||
+          (m.senderEmail === landlordEmail &&
             m.receiverId === currentUser.uid)
       );
+
+      // Update last read time when messages are loaded/viewed
+      if (filtered.length > 0) {
+        const latestMessage = filtered[filtered.length - 1];
+        const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
+        localStorage.setItem(lastReadKey, latestTime.toISOString());
+        
+        // Mark all current messages in this conversation as processed to prevent toasts on refresh
+        const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+        try {
+          const stored = localStorage.getItem(processedKey);
+          const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
+          filtered.forEach(msg => {
+            if (msg.senderId !== currentUser.uid) {
+              processedIds.add(msg.id);
+            }
+          });
+          const idsArray = Array.from(processedIds).slice(-1000);
+          localStorage.setItem(processedKey, JSON.stringify(idsArray));
+        } catch (error) {
+          console.warn('Failed to update processed message IDs:', error);
+        }
+      }
 
       setMessages(prevMessages => {
         const optimisticMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
@@ -79,6 +108,27 @@ function ChatModal({ house, onClose, isDarkMode }) {
     if (!newMessage.trim()) return;
 
     const messageText = newMessage.trim();
+    const landlordEmail = house.contactEmail || house.landlordEmail;
+    
+    if (!landlordEmail) {
+      toast.error('Landlord email not found');
+      return;
+    }
+
+    // Get landlord UID from email by querying users collection
+    let landlordUid = null;
+    try {
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('email', '==', landlordEmail)
+      );
+      const usersSnapshot = await getDocs(usersQuery);
+      if (!usersSnapshot.empty) {
+        landlordUid = usersSnapshot.docs[0].id;
+      }
+    } catch (error) {
+      console.warn('Could not find landlord UID from email:', error);
+    }
 
     // Optimistically add message to local state
     const optimisticMessage = {
@@ -89,8 +139,9 @@ function ChatModal({ house, onClose, isDarkMode }) {
       senderId: currentUser.uid,
       senderName: currentUser.displayName || "Tenant",
       senderEmail: currentUser.email,
-      receiverId: house.landlordId,
-      receiverName: house.landlordName,
+      receiverId: landlordUid || landlordEmail, // Use email as fallback
+      receiverEmail: landlordEmail,
+      receiverName: house.landlordName || "Landlord",
       timestamp: { toDate: () => new Date() }, // Temporary timestamp
     };
 
@@ -105,8 +156,9 @@ function ChatModal({ house, onClose, isDarkMode }) {
         senderId: currentUser.uid,
         senderName: currentUser.displayName || "Tenant",
         senderEmail: currentUser.email,
-        receiverId: house.landlordId,
-        receiverName: house.landlordName,
+        receiverId: landlordUid || landlordEmail,
+        receiverEmail: landlordEmail,
+        receiverName: house.landlordName || "Landlord",
         timestamp: serverTimestamp(),
       });
       toast.success('Message sent successfully');
@@ -115,7 +167,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
       // Remove optimistic message on error
       setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
       setNewMessage(messageText);
-      toast.error('Failed to send message');
+      toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
     }
   };
 

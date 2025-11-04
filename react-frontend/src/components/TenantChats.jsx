@@ -21,31 +21,52 @@ function TenantChats() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
 
-  // Fetch tenant’s conversations
+  // Fetch tenant's conversations (both sent and received)
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(
+    // Query for messages where tenant is sender
+    const sentQuery = query(
       collection(db, "messages"),
       where("senderId", "==", currentUser.uid),
       orderBy("timestamp", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    // Query for messages where tenant is receiver
+    const receivedQuery = query(
+      collection(db, "messages"),
+      where("receiverId", "==", currentUser.uid),
+      orderBy("timestamp", "desc")
+    );
 
-      // Group by landlord + houseId
+    let sentMessages = [];
+    let receivedMessages = [];
+
+    const updateConversations = () => {
+      // Combine both sent and received messages
+      const allMsgs = [...sentMessages, ...receivedMessages];
+
+      // Group by landlord email + houseId
       const grouped = {};
-      msgs.forEach((msg) => {
-        const key = `${msg.receiverId}_${msg.houseId}`;
-        if (!grouped[key]) {
+      allMsgs.forEach((msg) => {
+        // Determine the landlord (the other party) - use email if available
+        const landlordId = msg.senderId === currentUser.uid ? msg.receiverId : msg.senderId;
+        const landlordEmail = msg.senderId === currentUser.uid ? msg.receiverEmail : msg.senderEmail;
+        const landlordName = msg.senderId === currentUser.uid ? msg.receiverName : msg.senderName;
+        const key = `${landlordEmail || landlordId}_${msg.houseId}`;
+        
+        // Keep the most recent message for each conversation
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        const existingTime = grouped[key]?.lastTime 
+          ? (grouped[key].lastTime.toDate?.() || new Date(grouped[key].lastTime))
+          : null;
+        
+        if (!grouped[key] || (existingTime && msgTime > existingTime)) {
           grouped[key] = {
             houseId: msg.houseId,
-            landlordId: msg.receiverId,
-            landlordName: msg.receiverName || "Landlord",
+            landlordId: landlordId,
+            landlordEmail: landlordEmail,
+            landlordName: landlordName || "Landlord",
             lastMessage: msg.text,
             lastTime: msg.timestamp,
           };
@@ -53,14 +74,37 @@ function TenantChats() {
       });
 
       setConversations(Object.values(grouped));
+    };
+
+    const unsubscribeSent = onSnapshot(sentQuery, (snapshot) => {
+      sentMessages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      updateConversations();
     });
 
-    return () => unsubscribe();
+    const unsubscribeReceived = onSnapshot(receivedQuery, (snapshot) => {
+      receivedMessages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      updateConversations();
+    });
+
+    return () => {
+      unsubscribeSent();
+      unsubscribeReceived();
+    };
   }, [currentUser]);
 
   // Fetch messages for selected chat
   useEffect(() => {
     if (!selectedChat) return;
+
+    // Mark messages as read when viewing this chat
+    const lastReadKey = `tenant_last_read_${currentUser.uid}_${selectedChat.houseId}`;
+    localStorage.setItem(lastReadKey, new Date().toISOString());
 
     const q = query(
       collection(db, "messages"),
@@ -74,14 +118,39 @@ function TenantChats() {
         ...doc.data(),
       }));
 
-      // Only messages between this tenant and landlord
+      // Only messages between this tenant and landlord (by email or ID)
+      const landlordEmail = selectedChat.landlordEmail;
+      const landlordId = selectedChat.landlordId;
       const filtered = msgs.filter(
         (m) =>
           (m.senderId === currentUser.uid &&
-            m.receiverId === selectedChat.landlordId) ||
-          (m.senderId === selectedChat.landlordId &&
+            (m.receiverEmail === landlordEmail || m.receiverId === landlordId || m.receiverId === landlordEmail)) ||
+          ((m.senderId === landlordId || m.senderEmail === landlordEmail) &&
             m.receiverId === currentUser.uid)
       );
+
+      // Update last read time when messages are loaded/viewed
+      if (filtered.length > 0) {
+        const latestMessage = filtered[filtered.length - 1];
+        const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
+        localStorage.setItem(lastReadKey, latestTime.toISOString());
+        
+        // Mark all current messages in this conversation as processed to prevent toasts on refresh
+        const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+        try {
+          const stored = localStorage.getItem(processedKey);
+          const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
+          filtered.forEach(msg => {
+            if (msg.senderId !== currentUser.uid) {
+              processedIds.add(msg.id);
+            }
+          });
+          const idsArray = Array.from(processedIds).slice(-1000);
+          localStorage.setItem(processedKey, JSON.stringify(idsArray));
+        } catch (error) {
+          console.warn('Failed to update processed message IDs:', error);
+        }
+      }
 
       setMessages(prevMessages => {
         const optimisticMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
@@ -125,7 +194,8 @@ function TenantChats() {
       senderId: currentUser.uid,
       senderName: currentUser.displayName || "Tenant",
       senderEmail: currentUser.email,
-      receiverId: selectedChat.landlordId,
+      receiverId: selectedChat.landlordId || selectedChat.landlordEmail,
+      receiverEmail: selectedChat.landlordEmail,
       receiverName: selectedChat.landlordName,
       timestamp: { toDate: () => new Date() }, // Temporary timestamp
     };
@@ -140,7 +210,8 @@ function TenantChats() {
         senderId: currentUser.uid,
         senderName: currentUser.displayName || "Tenant",
         senderEmail: currentUser.email,
-        receiverId: selectedChat.landlordId,
+        receiverId: selectedChat.landlordId || selectedChat.landlordEmail,
+        receiverEmail: selectedChat.landlordEmail,
         receiverName: selectedChat.landlordName,
         timestamp: serverTimestamp(),
       });

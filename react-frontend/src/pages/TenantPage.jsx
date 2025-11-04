@@ -12,6 +12,7 @@ import {
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { djangoAPI } from '../services/djangoAPI';
+import { listenToAllHouseStatus } from '../utils/houseStatusListener';
 import {
   Search,
   LogOut,
@@ -52,9 +53,12 @@ function TenantPage() {
     const fetchHouses = async () => {
       try {
         const housesData = await djangoAPI.getHouses(); // This returns only approved + vacant houses
-        console.log('Loaded houses from Django:', housesData.length);
-        setHouses(Array.isArray(housesData) ? housesData : []);
-        setFilteredHouses(Array.isArray(housesData) ? housesData : []);
+        // Filter to ensure only approved and vacant houses are shown
+        const filtered = (Array.isArray(housesData) ? housesData : []).filter(
+          house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
+        );
+        setHouses(filtered);
+        setFilteredHouses(filtered);
       } catch (error) {
         console.error('TenantPage: Django API error:', error);
       }
@@ -62,10 +66,58 @@ function TenantPage() {
 
     fetchHouses();
 
-    // Auto-refresh every 5 seconds to show admin approval updates
-    const interval = setInterval(fetchHouses, 5000);
+    // Real-time house status updates using Firebase (replaces auto-refresh)
+    let unsubscribe = null;
+    
+    try {
+      unsubscribe = listenToAllHouseStatus((statusUpdates) => {
+        // Update houses when status changes are detected
+        setHouses(prevHouses => {
+          const updatedHouses = prevHouses.map(house => {
+            const statusUpdate = statusUpdates[String(house.id)];
+            if (statusUpdate) {
+              return {
+                ...house,
+                approval_status: statusUpdate.approval_status || house.approval_status,
+                isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
+              };
+            }
+            return house;
+          });
+          
+          // Filter to ensure only approved and vacant houses are shown
+          const filtered = updatedHouses.filter(
+            house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
+          );
+          
+          // Also add new houses that were just approved (if they're not in the list yet)
+          Object.keys(statusUpdates).forEach(houseId => {
+            const statusUpdate = statusUpdates[houseId];
+            if (statusUpdate.approval_status === 'approved' && 
+                (statusUpdate.isVacant === true || statusUpdate.isVacant === undefined)) {
+              // Check if house already exists in the list
+              const exists = updatedHouses.some(h => String(h.id) === houseId);
+              if (!exists && statusUpdate.approval_status === 'approved') {
+                // Fetch full house data from API
+                fetchHouses();
+              }
+            }
+          });
+          
+          setFilteredHouses(filtered);
+          return filtered;
+        });
+      });
+    } catch (err) {
+      console.error('Failed to set up house status listener, falling back to polling:', err);
+      // Fallback to polling if Firebase listener fails
+      const interval = setInterval(fetchHouses, 10000); // Poll every 10 seconds as fallback
+      return () => clearInterval(interval);
+    }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
 
@@ -131,46 +183,81 @@ function TenantPage() {
   useEffect(() => {
     if (!currentUser || houses.length === 0) return;
 
-    const q = query(
+    // Query messages where tenant is receiver (by UID or email)
+    const q1 = query(
       collection(db, 'messages'),
       where('receiverId', '==', currentUser.uid)
     );
+    
+    const q2 = query(
+      collection(db, 'messages'),
+      where('receiverEmail', '==', currentUser.email)
+    );
 
+    // Load previously processed message IDs from localStorage to persist across refreshes
+    const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+    const getProcessedIds = () => {
+      try {
+        const stored = localStorage.getItem(processedKey);
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch {
+        return new Set();
+      }
+    };
+
+    const saveProcessedIds = (ids) => {
+      try {
+        // Keep only last 1000 message IDs to avoid localStorage bloat
+        const idsArray = Array.from(ids).slice(-1000);
+        localStorage.setItem(processedKey, JSON.stringify(idsArray));
+      } catch (error) {
+        console.warn('Failed to save processed message IDs:', error);
+      }
+    };
+
+    let processedMessageIds = getProcessedIds();
     let previousMessages = [];
+    let allMessages = [];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
+    const processMessages = () => {
       // Find new messages that arrived after last read time for each house
-      const newMessages = messages.filter(msg => {
+      const newMessages = allMessages.filter(msg => {
         const houseId = msg.houseId;
         const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
         const lastReadTimestamp = localStorage.getItem(lastReadKey);
         const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        
+        // Strict check: message must be newer than last read time AND not already processed
         const isNew = msgTime > lastReadTime;
         const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
-        return isNew && isNotPrevious;
+        const notAlreadyShown = !processedMessageIds.has(msg.id);
+        const isFromLandlord = msg.senderId !== currentUser.uid;
+        
+        // Only consider it new if it's truly new, not from previous snapshot, not already shown, and from landlord
+        return isNew && isNotPrevious && notAlreadyShown && isFromLandlord;
       });
 
-      // Show toast for each new message
+      // Show toast for each new message (only from landlord, not tenant's own messages)
       newMessages.forEach(msg => {
-        const house = houses.find(h => h.id === msg.houseId);
-        const landlordName = house ? house.landlordName : 'Landlord';
-        toast.success(`New message from ${landlordName}: ${msg.text}`, {
+        const landlordEmail = msg.senderEmail || 'Landlord';
+        toast.success(`New message from ${landlordEmail}: ${msg.text}`, {
           duration: 5000,
         });
+        processedMessageIds.add(msg.id); // Mark as processed
       });
 
+      // Save processed IDs to localStorage
+      if (newMessages.length > 0) {
+        saveProcessedIds(processedMessageIds);
+      }
+
       // Update previous messages
-      previousMessages = messages;
+      previousMessages = [...allMessages];
 
       // Group messages by houseId and count unread ones
       const counts = {};
-      messages.forEach(msg => {
+      allMessages.forEach(msg => {
         const houseId = msg.houseId;
         if (!counts[houseId]) {
           counts[houseId] = 0;
@@ -182,15 +269,43 @@ function TenantPage() {
         const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
 
-        if (msgTime > lastReadTime) {
+        // Only count unread messages from landlord (not tenant's own messages)
+        if (msgTime > lastReadTime && msg.senderId !== currentUser.uid) {
           counts[houseId] += 1;
         }
       });
 
       setHouseMessageCounts(counts);
+    };
+
+    const unsubscribe1 = onSnapshot(q1, (snapshot) => {
+      const messages1 = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      allMessages = [...messages1];
+      processMessages();
     });
 
-    return () => unsubscribe();
+    const unsubscribe2 = onSnapshot(q2, (snapshot) => {
+      const messages2 = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      // Merge with existing messages, avoiding duplicates
+      const existingIds = new Set(allMessages.map(m => m.id));
+      messages2.forEach(msg => {
+        if (!existingIds.has(msg.id)) {
+          allMessages.push(msg);
+        }
+      });
+      processMessages();
+    });
+
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+    };
   }, [currentUser, houses]);
 
 

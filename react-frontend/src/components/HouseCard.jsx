@@ -31,7 +31,6 @@ function HouseCard({
 
   // Update local state when house prop changes
   useEffect(() => {
-    console.log('🏠 House prop updated for house:', house.id, 'isVacant:', house.isVacant);
     setIsVacant(house.isVacant);
   }, [house.isVacant]);
 
@@ -63,7 +62,7 @@ function HouseCard({
     setIsVacant(newVacant); // Update local state immediately for UI responsiveness
     if (onToggleVacancy) {
       console.log('🏠 Calling onToggleVacancy with:', house.id, newVacant);
-      onToggleVacancy(house.id, newVacant);
+      onToggleVacancy(newVacant,house.id );
     } else {
       console.log('🏠 onToggleVacancy is not defined!');
     }

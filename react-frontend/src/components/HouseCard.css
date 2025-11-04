@@ -16,6 +16,20 @@
 .house-card.occupied {
   opacity: 0.7;
   border-color: #e74c3c;
+  border-width: 3px;
+  position: relative;
+}
+
+.house-card.occupied::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(231, 76, 60, 0.1);
+  z-index: 1;
+  pointer-events: none;
 }
 
 .house-card.recommended {

@@ -131,7 +131,7 @@ export const djangoAPI = {
           })
         : [];
     }
-    if (updates.isVacant !== undefined) djangoUpdates.isVacant = Boolean(updates.isVacant);
+    if (updates.isVacant !== undefined) djangoUpdates.is_vacant = Boolean(updates.isVacant);
 
     return await makeApiCall(`/houses/${houseId}/`, {
       method: 'PATCH', // Use PATCH for partial updates
@@ -144,16 +144,11 @@ export const djangoAPI = {
   },
 
   toggleVacancy: async (houseId, isVacant) => {
-  const token = await getAuthToken();
-  return fetch(`${API_BASE_URL}/houses/${houseId}/`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ isVacant }),
-  });
-},
+    return await makeApiCall(`/houses/${houseId}/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_vacant: Boolean(isVacant) }),
+    });
+  },
 
 
 

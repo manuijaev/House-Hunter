@@ -5,6 +5,14 @@ from django.db.models import Q
 from .models import House
 from .serializers import HouseSerializer
 
+# Import Firebase helper for real-time updates
+try:
+    from .firebase_helper import update_house_status_in_firebase
+except ImportError:
+    # Firebase helper not available, continue without it
+    def update_house_status_in_firebase(*args, **kwargs):
+        pass
+
 # 🏠 Public + Landlord view: List approved houses / Create new pending house
 class HouseListCreateView(generics.ListCreateAPIView):
     serializer_class = HouseSerializer
@@ -28,9 +36,18 @@ class HouseListCreateView(generics.ListCreateAPIView):
         """
         Landlord posts a house (auto set to pending until admin approves).
         """
-        serializer.save(
+        house = serializer.save(
             landlord_name="Test Landlord",  # Replace with request.user.username once auth works
             approval_status='pending'
+        )
+        
+        # Broadcast initial status to Firebase for real-time updates
+        landlord_id = str(house.landlord.id) if house.landlord else None
+        update_house_status_in_firebase(
+            house_id=house.id,
+            approval_status='pending',
+            is_vacant=house.is_vacant,
+            landlord_id=landlord_id
         )
 
 
@@ -38,7 +55,25 @@ class HouseListCreateView(generics.ListCreateAPIView):
 class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = House.objects.all()
     serializer_class = HouseSerializer
-    permission_classes = [permissions.AllowAny]  # TODO: secure later
+    permission_classes = [permissions.AllowAny]
+
+    def update(self, request, *args, **kwargs):
+        """Override update to broadcast status changes to Firebase"""
+        partial = True  # ✅ Allow partial updates
+        response = super().update(request, *args, **kwargs, partial=partial)
+
+        if response.status_code == 200:
+            house = self.get_object()
+            landlord_id = str(house.landlord.id) if house.landlord else None
+            update_house_status_in_firebase(
+                house_id=house.id,
+                approval_status=house.approval_status,
+                is_vacant=house.is_vacant,
+                landlord_id=landlord_id
+            )
+
+        return response
+
 
 
 # 🧱 Landlord dashboard (show their own houses)
@@ -62,6 +97,16 @@ def approve_house(request, house_id):
         house = House.objects.get(id=house_id)
         house.approval_status = 'approved'
         house.save()
+        
+        # Broadcast status change to Firebase for real-time updates
+        landlord_id = str(house.landlord.id) if house.landlord else None
+        update_house_status_in_firebase(
+            house_id=house_id,
+            approval_status='approved',
+            is_vacant=house.is_vacant,
+            landlord_id=landlord_id
+        )
+        
         return Response({'message': 'House approved successfully'}, status=status.HTTP_200_OK)
     except House.DoesNotExist:
         return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -74,6 +119,16 @@ def reject_house(request, house_id):
         house = House.objects.get(id=house_id)
         house.approval_status = 'rejected'
         house.save()
+        
+        # Broadcast status change to Firebase for real-time updates
+        landlord_id = str(house.landlord.id) if house.landlord else None
+        update_house_status_in_firebase(
+            house_id=house_id,
+            approval_status='rejected',
+            is_vacant=house.is_vacant,
+            landlord_id=landlord_id
+        )
+        
         return Response({'message': 'House rejected successfully'}, status=status.HTTP_200_OK)
     except House.DoesNotExist:
         return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)

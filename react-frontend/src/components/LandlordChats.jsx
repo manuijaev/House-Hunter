@@ -8,6 +8,8 @@ import {
   addDoc,
   deleteDoc,
   getDocs,
+  getDoc,
+  doc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -17,238 +19,136 @@ import { toast } from 'react-hot-toast';
 function LandlordChats({ isDarkMode }) {
   const { currentUser } = useAuth();
   const [conversations, setConversations] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
   const [messageCounts, setMessageCounts] = useState({});
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyMessage, setReplyMessage] = useState("");
-  const messagesEndRef = useRef(null);
 
-  // Fetch landlord’s conversations
+  // Fetch landlord's conversations (by email or UID)
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(
+    // Query messages where landlord is receiver (by UID or email)
+    const q1 = query(
       collection(db, "messages"),
-      where("receiverId", "==", currentUser.uid),
-      orderBy("timestamp", "desc")
+      where("receiverId", "==", currentUser.uid)
+    );
+    
+    const q2 = query(
+      collection(db, "messages"),
+      where("receiverEmail", "==", currentUser.email)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    let unsubscribe1, unsubscribe2;
+    let allMessages = [];
 
-      // Group by tenant + houseId and count messages
+    const processMessages = () => {
+      // Group by tenant email + houseId and count messages
       const grouped = {};
-      msgs.forEach((msg) => {
-        const key = `${msg.senderId}_${msg.houseId}`;
+      allMessages.forEach((msg) => {
+        // Only process messages from tenants (not landlord's own messages)
+        if (msg.senderId === currentUser.uid || msg.senderEmail === currentUser.email) {
+          return; // Skip landlord's own sent messages
+        }
+        
+        // Use tenant email as primary key, fallback to senderId
+        const tenantKey = msg.senderEmail || msg.senderId;
+        const key = `${tenantKey}_${msg.houseId}`;
+        
         if (!grouped[key]) {
           grouped[key] = {
             houseId: msg.houseId,
             houseTitle: msg.houseTitle || 'Unknown House',
             tenantId: msg.senderId,
             tenantName: msg.senderName || "Tenant",
-            tenantEmail: msg.senderEmail,
+            tenantEmail: msg.senderEmail || "Unknown",
             lastMessage: msg.text,
             lastTime: msg.timestamp,
             messageCount: 0,
           };
         }
+        // Keep most recent message and time
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        const existingTime = grouped[key].lastTime?.toDate?.() || new Date(grouped[key].lastTime);
+        if (msgTime > existingTime) {
+          grouped[key].lastMessage = msg.text;
+          grouped[key].lastTime = msg.timestamp;
+        }
         grouped[key].messageCount += 1;
       });
 
-      setConversations(Object.values(grouped));
+      // Sort conversations by most recent message time
+      const sortedConversations = Object.values(grouped).sort((a, b) => {
+        const aTime = a.lastTime?.toDate?.() || new Date(a.lastTime);
+        const bTime = b.lastTime?.toDate?.() || new Date(b.lastTime);
+        return bTime - aTime; // Most recent first
+      });
+
+      setConversations(sortedConversations);
       setMessageCounts(grouped);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  // Fetch messages for selected conversation
-  useEffect(() => {
-    if (!selectedChat) return;
-
-    const q = query(
-      collection(db, "messages"),
-      where("houseId", "==", selectedChat.houseId),
-      orderBy("timestamp", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
+    unsubscribe1 = onSnapshot(q1, (snapshot) => {
+      const msgs1 = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-
-      // Only msgs between this landlord and this tenant
-      const filtered = msgs.filter(
-        (m) =>
-          (m.senderId === currentUser.uid &&
-            m.receiverId === selectedChat.tenantId) ||
-          (m.senderId === selectedChat.tenantId &&
-            m.receiverId === currentUser.uid)
-      );
-
-      setMessages(prevMessages => {
-        const optimisticMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
-        const allMessages = [...filtered];
-
-        // Keep optimistic messages that don't have real counterparts yet
-        optimisticMessages.forEach(optMsg => {
-          const exists = filtered.some(realMsg =>
-            realMsg.text === optMsg.text &&
-            realMsg.senderId === optMsg.senderId &&
-            Math.abs((realMsg.timestamp?.toDate?.() || realMsg.timestamp) - (optMsg.timestamp?.toDate?.() || optMsg.timestamp)) < 5000 // Within 5 seconds
-          );
-          if (!exists) {
-            allMessages.push(optMsg);
-          }
-        });
-
-
-        return allMessages.sort((a, b) => {
-          const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;
-          const bTime = b.timestamp?.toDate?.() || b.timestamp || 0;
-          return aTime - bTime;
-        });
-      });
+      allMessages = [...msgs1];
+      processMessages();
     });
 
-    return () => unsubscribe();
-  }, [selectedChat, currentUser]);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedChat) return;
-
-    const messageText = newMessage.trim();
-
-    // Optimistically add message to local state
-    const optimisticMessage = {
-      id: `temp-${Date.now()}`,
-      text: messageText,
-      houseId: selectedChat.houseId,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || "Landlord",
-      senderEmail: currentUser.email,
-      receiverId: selectedChat.tenantId,
-      receiverName: selectedChat.tenantName,
-      timestamp: { toDate: () => new Date() }, // Temporary timestamp
-    };
-
-    setMessages(prev => [...prev, optimisticMessage]);
-    setNewMessage("");
-
-    try {
-      await addDoc(collection(db, "messages"), {
-        text: messageText,
-        houseId: selectedChat.houseId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Landlord",
-        senderEmail: currentUser.email,
-        receiverId: selectedChat.tenantId,
-        receiverName: selectedChat.tenantName,
-        timestamp: serverTimestamp(),
+    unsubscribe2 = onSnapshot(q2, (snapshot) => {
+      const msgs2 = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      // Merge with existing messages, avoiding duplicates
+      const existingIds = new Set(allMessages.map(m => m.id));
+      msgs2.forEach(msg => {
+        if (!existingIds.has(msg.id)) {
+          allMessages.push(msg);
+        }
       });
-      toast.success('Message sent successfully');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      setNewMessage(messageText);
-      toast.error('Failed to send message');
-    }
-  };
+      processMessages();
+    });
 
-  const handleReply = async (originalMessage, replyText) => {
-    if (!replyText.trim() || !selectedChat) return;
-
-    const replyMessageText = replyText.trim();
-
-    // Optimistically add reply message to local state
-    const optimisticMessage = {
-      id: `temp-${Date.now()}`,
-      text: replyMessageText,
-      houseId: selectedChat.houseId,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || "Landlord",
-      senderEmail: currentUser.email,
-      receiverId: selectedChat.tenantId,
-      receiverName: selectedChat.tenantName,
-      timestamp: { toDate: () => new Date() }, // Temporary timestamp
+    return () => {
+      if (unsubscribe1) unsubscribe1();
+      if (unsubscribe2) unsubscribe2();
     };
+  }, [currentUser]);
 
-    setMessages(prev => [...prev, optimisticMessage]);
-    setReplyingTo(null);
-    setReplyMessage("");
-
-    try {
-      await addDoc(collection(db, "messages"), {
-        text: replyMessageText,
-        houseId: selectedChat.houseId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Landlord",
-        senderEmail: currentUser.email,
-        receiverId: selectedChat.tenantId,
-        receiverName: selectedChat.tenantName,
-        timestamp: serverTimestamp(),
-      });
-      toast.success('Reply sent successfully');
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      setReplyingTo(originalMessage);
-      setReplyMessage(replyMessageText);
-      toast.error('Failed to send reply');
-    }
-  };
-
-  const handleClearConversation = () => {
-    if (!selectedChat) return;
-
-    if (window.confirm('Are you sure you want to clear this conversation? Messages will be cleared from your view only.')) {
-      setMessages([]);
-      setReplyingTo(null);
-      setReplyMessage("");
-      toast.success('Conversation cleared from your view');
-    }
-  };
+  // Note: TenantChatContainer handles all messaging functionality
 
   const handleDeleteAllConversations = async () => {
     if (!window.confirm('Are you sure you want to delete all conversations? This action cannot be undone.')) return;
 
     try {
-      // Delete messages where landlord is receiver
+      // Delete messages where landlord is receiver (by UID or email)
       const q1 = query(collection(db, "messages"), where("receiverId", "==", currentUser.uid));
-      const snapshot1 = await getDocs(q1);
-      // Delete messages where landlord is sender
-      const q2 = query(collection(db, "messages"), where("senderId", "==", currentUser.uid));
-      const snapshot2 = await getDocs(q2);
+      const q2 = query(collection(db, "messages"), where("receiverEmail", "==", currentUser.email));
+      // Delete messages where landlord is sender (by UID or email)
+      const q3 = query(collection(db, "messages"), where("senderId", "==", currentUser.uid));
+      const q4 = query(collection(db, "messages"), where("senderEmail", "==", currentUser.email));
 
-      const deletePromises = [
-        ...snapshot1.docs.map(doc => deleteDoc(doc.ref)),
-        ...snapshot2.docs.map(doc => deleteDoc(doc.ref))
-      ];
+      const [snapshot1, snapshot2, snapshot3, snapshot4] = await Promise.all([
+        getDocs(q1),
+        getDocs(q2),
+        getDocs(q3),
+        getDocs(q4)
+      ]);
+
+      // Collect all unique document refs to avoid duplicate deletions
+      const docRefs = new Set();
+      [snapshot1, snapshot2, snapshot3, snapshot4].forEach(snapshot => {
+        snapshot.docs.forEach(doc => docRefs.add(doc.ref));
+      });
+
+      const deletePromises = Array.from(docRefs).map(ref => deleteDoc(ref));
       await Promise.all(deletePromises);
       setConversations([]);
       setMessageCounts({});
-      setMessages([]);
-      setSelectedChat(null);
       toast.success('All conversations deleted successfully');
     } catch (error) {
       console.error('Error deleting conversations:', error);
-      toast.error('Failed to delete conversations');
+      toast.error('Failed to delete conversations: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -279,10 +179,14 @@ function LandlordChats({ isDarkMode }) {
 
     // Fetch messages for this specific conversation
     useEffect(() => {
+      // Mark messages as read when viewing this conversation
+      const lastReadKey = `landlord_last_read_${currentUser.uid}`;
+      localStorage.setItem(lastReadKey, new Date().toISOString());
+
+      // Query without orderBy to avoid index requirement, sort manually
       const q = query(
         collection(db, "messages"),
-        where("houseId", "==", conversation.houseId),
-        orderBy("timestamp", "asc")
+        where("houseId", "==", conversation.houseId)
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -291,14 +195,39 @@ function LandlordChats({ isDarkMode }) {
           ...doc.data(),
         }));
 
-        // Only msgs between this landlord and this tenant
+        // Only msgs between this landlord and this tenant (by email or UID)
+        const tenantEmail = conversation.tenantEmail;
+        const tenantId = conversation.tenantId;
         const filtered = msgs.filter(
           (m) =>
             (m.senderId === currentUser.uid &&
-              m.receiverId === conversation.tenantId) ||
-            (m.senderId === conversation.tenantId &&
-              m.receiverId === currentUser.uid)
+              (m.receiverEmail === tenantEmail || m.receiverId === tenantId || m.receiverId === tenantEmail)) ||
+            ((m.senderId === tenantId || m.senderEmail === tenantEmail) &&
+              (m.receiverId === currentUser.uid || m.receiverEmail === currentUser.email))
         );
+
+        // Update last read time when messages are loaded/viewed
+        if (filtered.length > 0) {
+          const latestMessage = filtered[filtered.length - 1];
+          const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
+          localStorage.setItem(lastReadKey, latestTime.toISOString());
+          
+          // Mark all current messages in this conversation as processed to prevent toasts on refresh
+          const processedKey = `landlord_processed_messages_${currentUser.uid}`;
+          try {
+            const stored = localStorage.getItem(processedKey);
+            const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
+            filtered.forEach(msg => {
+              if (msg.senderId !== currentUser.uid) {
+                processedIds.add(msg.id);
+              }
+            });
+            const idsArray = Array.from(processedIds).slice(-1000);
+            localStorage.setItem(processedKey, JSON.stringify(idsArray));
+          } catch (error) {
+            console.warn('Failed to update processed message IDs:', error);
+          }
+        }
 
         setMessages(filtered.sort((a, b) => {
           const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;
@@ -312,18 +241,9 @@ function LandlordChats({ isDarkMode }) {
 
     const handleSendNewMessage = async (e) => {
       e.preventDefault();
-      console.log('handleSendNewMessage called');
-      console.log('newMessageText:', newMessageText);
-      console.log('conversation:', conversation);
-      console.log('currentUser:', currentUser);
-
-      if (!newMessageText.trim()) {
-        console.log('Message is empty, returning');
-        return;
-      }
+      if (!newMessageText.trim()) return;
 
       const messageToSend = newMessageText.trim();
-      console.log('Message to send:', messageToSend);
 
       // Optimistically add message to local state
       const optimisticMessage = {
@@ -338,32 +258,29 @@ function LandlordChats({ isDarkMode }) {
         timestamp: { toDate: () => new Date() },
       };
 
-      console.log('Optimistic message:', optimisticMessage);
       setMessages(prev => [...prev, optimisticMessage]);
       setNewMessageText("");
 
       try {
-        console.log('Attempting to add document to Firestore...');
-        const docRef = await addDoc(collection(db, "messages"), {
+        await addDoc(collection(db, "messages"), {
           text: messageToSend,
           houseId: conversation.houseId,
+          houseTitle: conversation.houseTitle,
           senderId: currentUser.uid,
           senderName: currentUser.displayName || "Landlord",
           senderEmail: currentUser.email,
-          receiverId: conversation.tenantId,
+          receiverId: conversation.tenantId || conversation.tenantEmail,
+          receiverEmail: conversation.tenantEmail,
           receiverName: conversation.tenantName,
           timestamp: serverTimestamp(),
         });
-        console.log('Document added successfully with ID:', docRef.id);
         toast.success('Message sent successfully');
       } catch (error) {
         console.error('Error sending message:', error);
-        console.error('Error details:', error.message);
-        console.error('Error code:', error.code);
         // Remove optimistic message on error
         setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
         setNewMessageText(messageToSend);
-        toast.error('Failed to send message: ' + error.message);
+        toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
       }
     };
 
@@ -380,7 +297,8 @@ function LandlordChats({ isDarkMode }) {
         senderId: currentUser.uid,
         senderName: currentUser.displayName || "Landlord",
         senderEmail: currentUser.email,
-        receiverId: conversation.tenantId,
+        receiverId: conversation.tenantId || conversation.tenantEmail,
+        receiverEmail: conversation.tenantEmail,
         receiverName: conversation.tenantName,
         timestamp: { toDate: () => new Date() },
       };
@@ -393,10 +311,12 @@ function LandlordChats({ isDarkMode }) {
         await addDoc(collection(db, "messages"), {
           text: replyMessageText,
           houseId: conversation.houseId,
+          houseTitle: conversation.houseTitle,
           senderId: currentUser.uid,
           senderName: currentUser.displayName || "Landlord",
           senderEmail: currentUser.email,
-          receiverId: conversation.tenantId,
+          receiverId: conversation.tenantId || conversation.tenantEmail,
+          receiverEmail: conversation.tenantEmail,
           receiverName: conversation.tenantName,
           timestamp: serverTimestamp(),
         });
@@ -406,7 +326,7 @@ function LandlordChats({ isDarkMode }) {
         setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
         setLocalReplyingTo(originalMessage);
         setLocalReplyMessage(replyMessageText);
-        toast.error('Failed to send reply');
+        toast.error('Failed to send reply: ' + (error.message || 'Unknown error'));
       }
     };
 
@@ -600,14 +520,17 @@ function LandlordChats({ isDarkMode }) {
         </div>
       ) : (
         <div className="tenant-chats-grid">
-          {conversations.map((conversation, idx) => (
-            <TenantChatContainer
-              key={idx}
-              conversation={conversation}
-              currentUser={currentUser}
-              isDarkMode={isDarkMode}
-            />
-          ))}
+          {conversations.map((conversation) => {
+            const uniqueKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
+            return (
+              <TenantChatContainer
+                key={uniqueKey}
+                conversation={conversation}
+                currentUser={currentUser}
+                isDarkMode={isDarkMode}
+              />
+            );
+          })}
         </div>
       )}
     </div>

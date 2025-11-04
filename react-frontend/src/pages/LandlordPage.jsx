@@ -32,7 +32,7 @@ import LandlordChats from '../components/LandlordChats';
 import logo from '../assets/logo.jpeg';
 import '../pages/LandlordDashboard.css';
 import { getAuthToken } from '../services/djangoAPI';
-
+import { listenToLandlordHousesStatus } from '../utils/houseStatusListener';
 
 // Django API helper (fused, non-destructive)
 import { djangoAPI } from '../services/djangoAPI';
@@ -65,7 +65,6 @@ useEffect(() => {
     try {
       const data = await djangoAPI.getLandlordHouses(currentUser.uid);
       const housesArray = Array.isArray(data) ? data : [];
-      console.log('Initial load - houses:', housesArray.length, 'with statuses:', housesArray.map(h => ({ id: h.id, status: h.approval_status, vacant: h.isVacant })));
       setHouses(housesArray);
     } catch (err) {
       console.error('Error fetching landlord houses from Django:', err);
@@ -111,67 +110,185 @@ useEffect(() => {
     localStorage.setItem('theme', newTheme ? 'dark' : 'light');
   };
 
+  
+  // Refresh houses data from Django (for real-time admin approval updates)
+  const refreshHouses = useCallback(async () => {
+    try {
+      const data = await djangoAPI.getLandlordHouses(currentUser.uid);
+      const housesArray = Array.isArray(data) ? data : [];
+      setHouses([...housesArray]);
+    } catch (err) {
+      console.error('Error refreshing houses:', err);
+    }
+  }, [currentUser]);
   // ----------------------------------------------------------------------
-  // Auto-refresh houses every 5 seconds to show admin approval updates
+  // Real-time house status updates using Firebase (replaces auto-refresh)
   // ----------------------------------------------------------------------
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (currentUser?.uid) {
-        refreshHouses();
-      }
-    }, 5000); // Refresh every 5 seconds
+    if (!currentUser?.uid) return;
 
-    return () => clearInterval(interval);
-  }, [currentUser]); // Remove refreshHouses from dependencies to avoid circular dependency
+    let unsubscribe = null;
+    
+    // Listen to all house status updates and filter for landlord's houses
+    import('../utils/houseStatusListener').then(({ listenToAllHouseStatus }) => {
+      unsubscribe = listenToAllHouseStatus((statusUpdates) => {
+        // Update houses when status changes are detected (only for houses we own)
+        setHouses(prevHouses => {
+          return prevHouses.map(house => {
+            const statusUpdate = statusUpdates[String(house.id)];
+            if (statusUpdate) {
+              // Verify this is the landlord's house (by checking if it's in our list)
+              return {
+                ...house,
+                approval_status: statusUpdate.approval_status || house.approval_status,
+                isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
+              };
+            }
+            return house;
+          });
+        });
+      });
+
+      // Initial fetch
+      refreshHouses();
+    }).catch(err => {
+      console.error('Failed to set up house status listener, falling back to polling:', err);
+      // Fallback to polling if Firebase listener fails
+      const interval = setInterval(() => {
+        if (currentUser?.uid) {
+          refreshHouses();
+        }
+      }, 10000); // Poll every 10 seconds as fallback
+      
+      refreshHouses();
+      return () => clearInterval(interval);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [currentUser, refreshHouses]);
 
   // ----------------------------------------------------------------------
-  // Unread messages tracking (real-time) - keep Firebase messages intact
+  // Unread messages tracking (real-time) - query by both UID and email
   // ----------------------------------------------------------------------
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(
+    // Query messages where landlord is receiver (by UID or email)
+    const q1 = query(
       collection(db, 'messages'),
       where('receiverId', '==', currentUser.uid)
     );
+    
+    const q2 = query(
+      collection(db, 'messages'),
+      where('receiverEmail', '==', currentUser.email)
+    );
 
+    // Load previously processed message IDs from localStorage to persist across refreshes
+    const processedKey = `landlord_processed_messages_${currentUser.uid}`;
+    const getProcessedIds = () => {
+      try {
+        const stored = localStorage.getItem(processedKey);
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch {
+        return new Set();
+      }
+    };
+
+    const saveProcessedIds = (ids) => {
+      try {
+        // Keep only last 1000 message IDs to avoid localStorage bloat
+        const idsArray = Array.from(ids).slice(-1000);
+        localStorage.setItem(processedKey, JSON.stringify(idsArray));
+      } catch (error) {
+        console.warn('Failed to save processed message IDs:', error);
+      }
+    };
+
+    let processedMessageIds = getProcessedIds();
     let previousMessages = [];
+    let allMessages = [];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      }));
-
+    const processMessages = () => {
       // Last read timestamp
       const lastReadKey = `landlord_last_read_${currentUser.uid}`;
       const lastReadTimestamp = localStorage.getItem(lastReadKey);
       const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
 
-      const newMessages = messages.filter((msg) => {
+      const newMessages = allMessages.filter((msg) => {
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        
+        // Strict check: message must be newer than last read time AND not already processed
         const isNew = msgTime > lastReadTime;
         const isNotPrevious = !previousMessages.some((prev) => prev.id === msg.id);
-        return isNew && isNotPrevious;
+        const notAlreadyShown = !processedMessageIds.has(msg.id);
+        // Only show toast for messages from tenants (not landlord's own messages)
+        const isFromTenant = msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email;
+        
+        // Only consider it new if it's truly new, not from previous snapshot, not already shown, and from tenant
+        return isNew && isNotPrevious && notAlreadyShown && isFromTenant;
       });
 
       newMessages.forEach((msg) => {
-        toast.success(`New message from ${msg.senderName}: ${msg.text}`, { duration: 5000 });
+        // Only show toast for messages from tenants
+        if (msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email) {
+          const tenantEmail = msg.senderEmail || msg.senderName || 'Tenant';
+          toast.success(`New message from ${tenantEmail}: ${msg.text}`, { duration: 5000 });
+          processedMessageIds.add(msg.id); // Mark as processed
+        }
       });
 
-      previousMessages = messages;
+      // Save processed IDs to localStorage
+      if (newMessages.length > 0) {
+        saveProcessedIds(processedMessageIds);
+      }
 
-      const unreadCount = messages.filter((msg) => {
+      previousMessages = [...allMessages];
+
+      const unreadCount = allMessages.filter((msg) => {
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        return msgTime > lastReadTime;
+        // Only count unread messages from tenants (not landlord's own messages)
+        const isFromTenant = msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email;
+        return msgTime > lastReadTime && isFromTenant;
       }).length;
 
       setUnreadMessages(unreadCount);
+    };
+
+    const unsubscribe1 = onSnapshot(q1, (snapshot) => {
+      const messages1 = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }));
+      allMessages = [...messages1];
+      processMessages();
     }, (err) => {
-      console.error('Messages onSnapshot error:', err);
+      console.error('Messages q1 onSnapshot error:', err);
     });
 
-    return () => unsubscribe();
+    const unsubscribe2 = onSnapshot(q2, (snapshot) => {
+      const messages2 = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }));
+      // Merge with existing messages, avoiding duplicates
+      const existingIds = new Set(allMessages.map(m => m.id));
+      messages2.forEach(msg => {
+        if (!existingIds.has(msg.id)) {
+          allMessages.push(msg);
+        }
+      });
+      processMessages();
+    }, (err) => {
+      console.error('Messages q2 onSnapshot error:', err);
+    });
+
+    return () => {
+      if (unsubscribe1) unsubscribe1();
+      if (unsubscribe2) unsubscribe2();
+    };
   }, [currentUser]);
 
   // ----------------------------------------------------------------------
@@ -218,22 +335,7 @@ useEffect(() => {
     }
   };
 
-  // Refresh houses data from Django (for real-time admin approval updates)
-  const refreshHouses = useCallback(async () => {
-    try {
-      console.log('🔄 Fetching houses from Django API...');
-      const data = await djangoAPI.getLandlordHouses(currentUser.uid);
-      const housesArray = Array.isArray(data) ? data : [];
-      console.log('✅ Refreshed houses:', housesArray.length, 'houses');
-      console.log('📊 House statuses:', housesArray.map(h => ({ id: h.id, status: h.approval_status, vacant: h.isVacant })));
 
-      // Force a re-render by creating a new array reference
-      setHouses([...housesArray]);
-    } catch (err) {
-      console.error('❌ Error refreshing houses:', err);
-      console.error('❌ Refresh error details:', err.message);
-    }
-  }, [currentUser]);
 
   // Update house: update both Firebase and Django (keeps original behavior + sync)
   const handleUpdateHouse = async (houseId, updates) => {
@@ -343,28 +445,42 @@ useEffect(() => {
   const combinedHouses = houses;
   // Toggle house vacancy status
   const handleToggleVacancy = async (houseId, isVacant) => {
-    console.log('🔄 Starting vacancy toggle for house:', houseId, 'to isVacant:', isVacant);
-
     try {
-      console.log('📡 Sending update to Django API...');
-      const updateResult = await djangoAPI.updateHouse(houseId, { isVacant });
-      console.log('✅ Django update successful:', updateResult);
-
-      // Update local state immediately for better UX
+      // Update UI immediately
       setHouses(prev =>
         prev.map(h =>
-          String(h.id) === String(houseId) ? { ...h, isVacant, ...updateResult } : h
+          String(h.id) === String(houseId) ? { ...h, isVacant } : h
         )
       );
-
+  
+      // ✅ Save to Django (make sure both keys are sent)
+      await djangoAPI.updateHouse(houseId, {
+        isVacant,
+        is_vacant: isVacant
+      });
+  
+      // ✅ Also sync to Firebase (optional)
+      try {
+        const { updateHouseStatusInFirebase } = await import('../utils/houseStatusListener');
+        const house = houses.find(h => String(h.id) === String(houseId));
+        if (house) {
+          await updateHouseStatusInFirebase(String(houseId), {
+            approval_status: house.approval_status,
+            is_vacant: isVacant,
+            landlord_id: currentUser.uid
+          });
+        }
+      } catch (fbErr) {
+        console.warn('Firebase sync failed (non-critical):', fbErr);
+      }
+  
       toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
-      console.log(`✅ House ${houseId} marked as ${isVacant ? 'vacant' : 'occupied'}`);
     } catch (err) {
-      console.error('❌ Vacancy toggle error:', err);
-      console.error('❌ Error details:', err.message);
-      toast.error('Failed to update house vacancy');
+      console.error('Vacancy toggle error:', err);
+      toast.error('Failed to update house vacancy: ' + (err?.message || 'Unknown error'));
     }
   };
+  
 
 
   // ----------------------------------------------------------------------
