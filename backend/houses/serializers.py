@@ -2,15 +2,14 @@ from rest_framework import serializers
 from .models import House
 
 class HouseSerializer(serializers.ModelSerializer):
-    # ✅ Map to model field (is_vacant)
+    # Writable aliases for frontend field names
     isVacant = serializers.BooleanField(source='is_vacant', required=False)
-    
-    monthlyRent = serializers.DecimalField(source='monthly_rent', max_digits=10, decimal_places=2, read_only=True)
-    contactPhone = serializers.CharField(source='contact_phone', read_only=True)
-    contactEmail = serializers.CharField(source='contact_email', read_only=True)
-    landlordName = serializers.CharField(source='landlord_name', read_only=True)
-    displayName = serializers.CharField(source='landlord_name', read_only=True)
-    availableDate = serializers.DateField(source='available_date', read_only=True)
+    monthlyRent = serializers.DecimalField(source='monthly_rent', max_digits=10, decimal_places=2, required=False)
+    contactPhone = serializers.CharField(source='contact_phone', required=False, allow_blank=True)
+    contactEmail = serializers.EmailField(source='contact_email', required=False, allow_blank=True)
+    landlordName = serializers.CharField(source='landlord_name', required=False, allow_blank=True)
+    displayName = serializers.CharField(source='landlord_name', required=False, allow_blank=True)
+    availableDate = serializers.DateField(source='available_date', required=False, allow_null=True)
 
     class Meta:
         model = House
@@ -22,19 +21,18 @@ class HouseSerializer(serializers.ModelSerializer):
             'contactPhone', 'contactEmail'
         ]
         read_only_fields = [
-            'id', 'landlord', 'landlord_name',
+            'id', 'landlord',
             'approval_status', 'created_at'
         ]
+    
+    def update(self, instance, validated_data):
+        # Support both naming conventions (extra safety)
+        is_vacant_data = (
+            validated_data.pop('is_vacant', None)
+            or validated_data.pop('isVacant', None)
+        )
+        if is_vacant_data is not None:
+            instance.is_vacant = is_vacant_data
 
-    # ✅ Handle vacancy toggling cleanly
-def update(self, instance, validated_data):
-    # ✅ Support both naming conventions
-    is_vacant_data = (
-        validated_data.pop('is_vacant', None)
-        or validated_data.pop('isVacant', None)
-    )
-    if is_vacant_data is not None:
-        instance.is_vacant = is_vacant_data
-
-    return super().update(instance, validated_data)
+        return super().update(instance, validated_data)
 

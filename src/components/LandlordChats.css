@@ -60,10 +60,8 @@
 
 .tenant-chats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 .tenant-chat-container {
@@ -356,7 +354,9 @@
 .chat-container {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 20px;
   height: 100%;
 }
 
@@ -861,7 +861,7 @@
 /* Mobile Responsiveness */
 @media (max-width: 1024px) {
   .tenant-chats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
   }
 
@@ -873,6 +873,9 @@
 @media (max-width: 768px) {
   .landlord-chats {
     padding: 16px;
+  }
+  .chat-container {
+    flex-direction: column;
   }
 
   .chats-header {

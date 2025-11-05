@@ -15,11 +15,36 @@ import {
 import { db } from "../firebase/config";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from 'react-hot-toast';
+import './LandlordChats.css';
 
 function LandlordChats({ isDarkMode }) {
   const { currentUser } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [messageCounts, setMessageCounts] = useState({});
+  const [selectedKey, setSelectedKey] = useState(null);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [totalUnread, setTotalUnread] = useState(0);
+  const [openedKeys, setOpenedKeys] = useState(() => new Set());
+
+  const maskEmail = (email) => {
+    if (!email || typeof email !== 'string') return 'Tenant';
+    const [name, domain] = email.split('@');
+    if (!domain) return email;
+    const short = name.length > 6 ? name.slice(0, 6) + '•••' : name;
+    return `${short}@${domain}`;
+  };
+
+  const truncate = (text, len = 60) => {
+    if (!text) return '';
+    return text.length > len ? text.slice(0, len) + '…' : text;
+  };
+
+  const timeStr = (ts) => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   // Fetch landlord's conversations (by email or UID)
   useEffect(() => {
@@ -56,12 +81,14 @@ function LandlordChats({ isDarkMode }) {
           grouped[key] = {
             houseId: msg.houseId,
             houseTitle: msg.houseTitle || 'Unknown House',
+            houseSize: msg.houseSize || msg.size || '',
             tenantId: msg.senderId,
             tenantName: msg.senderName || "Tenant",
             tenantEmail: msg.senderEmail || "Unknown",
             lastMessage: msg.text,
             lastTime: msg.timestamp,
             messageCount: 0,
+            unreadCount: 0,
           };
         }
         // Keep most recent message and time
@@ -72,6 +99,17 @@ function LandlordChats({ isDarkMode }) {
           grouped[key].lastTime = msg.timestamp;
         }
         grouped[key].messageCount += 1;
+
+        // Unread count (compare to per-conversation last read)
+        try {
+          const lastReadKey = `landlord_last_read_${currentUser.uid}_${key}`;
+          const lastReadIso = localStorage.getItem(lastReadKey);
+          const lastRead = lastReadIso ? new Date(lastReadIso) : new Date(0);
+          const mTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+          if (mTime > lastRead) {
+            grouped[key].unreadCount += 1;
+          }
+        } catch {}
       });
 
       // Sort conversations by most recent message time
@@ -83,6 +121,12 @@ function LandlordChats({ isDarkMode }) {
 
       setConversations(sortedConversations);
       setMessageCounts(grouped);
+      // compute total unread across conversations
+      const unreadTotal = Object.values(grouped).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+      setTotalUnread(unreadTotal);
+      try {
+        window.dispatchEvent(new CustomEvent('landlord:unread', { detail: { totalUnread: unreadTotal } }));
+      } catch {}
     };
 
     unsubscribe1 = onSnapshot(q1, (snapshot) => {
@@ -115,7 +159,34 @@ function LandlordChats({ isDarkMode }) {
     };
   }, [currentUser]);
 
-  // Note: TenantChatContainer handles all messaging functionality
+  // Toggle conversation selection with dynamic side panel
+  const handleSelectConversation = async (key, convo) => {
+    if (selectedKey === key) {
+      // Close panel
+      setSelectedKey(null);
+      setSelectedConversation(null);
+      return;
+    }
+
+    setSelectedKey(key);
+    setSelectedConversation(convo);
+
+    // Mark as read ONLY locally (no message receipts stored)
+    try {
+      const lastReadKey = `landlord_last_read_${currentUser.uid}_${key}`;
+      localStorage.setItem(lastReadKey, new Date().toISOString());
+    } catch (e) {
+      // ignore
+    }
+
+    // Clear unread immediately for this card and remember it was opened
+    setMessageCounts(prev => {
+      const next = { ...prev };
+      if (next[key]) next[key] = { ...next[key], unreadCount: 0 };
+      return next;
+    });
+    setOpenedKeys(prev => new Set(prev).add(key));
+  };
 
   const handleDeleteAllConversations = async () => {
     if (!window.confirm('Are you sure you want to delete all conversations? This action cannot be undone.')) return;
@@ -159,28 +230,32 @@ function LandlordChats({ isDarkMode }) {
     const [localReplyMessage, setLocalReplyMessage] = useState("");
     const [newMessageText, setNewMessageText] = useState("");
     const [houseTitle, setHouseTitle] = useState(conversation.houseTitle);
+    const [houseSize, setHouseSize] = useState(conversation.houseSize || '');
 
     // Fetch house title if unknown
     useEffect(() => {
-      if (houseTitle !== 'Unknown House') return;
+      if (houseTitle !== 'Unknown House' && houseSize) return;
 
       const fetchHouseTitle = async () => {
         try {
           const houseDoc = await getDoc(doc(db, 'houses', conversation.houseId));
           if (houseDoc.exists()) {
-            setHouseTitle(houseDoc.data().title);
+            const data = houseDoc.data();
+            setHouseTitle(data.title);
+            setHouseSize(data.size || '');
           }
         } catch (error) {
           console.error('Error fetching house:', error);
         }
       };
       fetchHouseTitle();
-    }, [houseTitle, conversation.houseId]);
+    }, [houseTitle, houseSize, conversation.houseId]);
 
     // Fetch messages for this specific conversation
     useEffect(() => {
       // Mark messages as read when viewing this conversation
-      const lastReadKey = `landlord_last_read_${currentUser.uid}`;
+      const convKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
+      const lastReadKey = `landlord_last_read_${currentUser.uid}_${convKey}`;
       localStorage.setItem(lastReadKey, new Date().toISOString());
 
       // Query without orderBy to avoid index requirement, sort manually
@@ -340,6 +415,16 @@ function LandlordChats({ isDarkMode }) {
         );
       }
 
+      const convKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
+      const lastReadKey = `landlord_last_read_${currentUser.uid}_${convKey}`;
+      const lastReadIso = localStorage.getItem(lastReadKey);
+      const lastReadAt = lastReadIso ? new Date(lastReadIso) : null;
+
+      // find last tenant message time
+      const tenantMessages = messages.filter(m => m.senderId !== currentUser.uid);
+      const lastTenantMsg = tenantMessages[tenantMessages.length - 1];
+      const lastTenantTime = lastTenantMsg ? (lastTenantMsg.timestamp?.toDate?.() || new Date(lastTenantMsg.timestamp)) : null;
+
       // Group messages by date and user
       const groupedMessages = messages.reduce((groups, msg) => {
         const date = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
@@ -417,6 +502,9 @@ function LandlordChats({ isDarkMode }) {
                         <p className="message-text">{msg.text}</p>
                         <span className="message-time">{msg.timeString}</span>
                       </div>
+                      {!group.isSent && lastReadAt && lastTenantMsg && msg.id === lastTenantMsg.id && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: '#9ca3af' }}>Seen by landlord</div>
+                      )}
 
                       {/* Inline reply input */}
                       {localReplyingTo?.id === msg.id && (
@@ -468,7 +556,7 @@ function LandlordChats({ isDarkMode }) {
           <div className="tenant-info">
             <div className="tenant-details">
               <h4 style={{ background: '#5a6fd8', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', display: 'inline-block' }}>{conversation.tenantName}</h4>
-              <p>House needed: {houseTitle}</p>
+              <p>House needed: {houseTitle}{houseSize ? `_${houseSize}` : ''}</p>
               {conversation.tenantEmail && (
                 <span className="tenant-email">Tenant's email:{conversation.tenantEmail}</span>
               )}
@@ -510,7 +598,7 @@ function LandlordChats({ isDarkMode }) {
           <h2>Tenant Conversations</h2>
           <p>{conversations.length} active chats</p>
         </div>
-        <button onClick={handleDeleteAllConversations} style={{ background: 'crimson', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s ease', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete All Conversations</button>
+        <button onClick={handleDeleteAllConversations} className="delete-all-btn">Delete All Conversations</button>
       </div>
 
       {conversations.length === 0 ? (
@@ -519,18 +607,61 @@ function LandlordChats({ isDarkMode }) {
           <p>Messages from tenants will appear here</p>
         </div>
       ) : (
-        <div className="tenant-chats-grid">
-          {conversations.map((conversation) => {
-            const uniqueKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
-            return (
+        <div className="chat-container">
+          <div className="tenant-chats-grid" style={{ flex: 1 }}>
+            {conversations.map((c) => {
+              const key = `${c.tenantEmail || c.tenantId}_${c.houseId}`;
+              const isActive = key === selectedKey;
+              const unread = messageCounts[key]?.unreadCount || 0;
+              return (
+                <div
+                  key={key}
+                  className={`tenant-chat-container`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleSelectConversation(key, c)}
+                >
+                  <div className="tenant-chat-header">
+                    <div className="tenant-info">
+                      <div className="tenant-details">
+                        <h4>{maskEmail(c.tenantEmail) || c.tenantName || 'Tenant'}</h4>
+                        <p>{(c.houseTitle || 'House')}{c.houseSize ? `_${c.houseSize}` : ''}</p>
+                      </div>
+                    </div>
+                    <div className="chat-stats">
+                      <span className="message-count">{timeStr(c.lastTime)}</span>
+                    </div>
+                  </div>
+                  <div className="tenant-messages-container" style={{ minHeight: 100 }}>
+                    <div className="conversation-preview">{truncate(c.lastMessage || '')}</div>
+                  </div>
+                  <div className="tenant-message-input" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectConversation(key, c); }} style={{ background: 'transparent', border: 'none', color: '#667eea', fontWeight: 600, cursor: 'pointer' }}>
+                      {isActive ? 'Close Chat' : 'Open Chat →'}
+                    </button>
+                    {unread > 0 && !openedKeys.has(key) && (
+                      <span className="message-count" style={{ background: '#dc3545', color: 'white', borderRadius: 12, padding: '2px 8px' }}>{unread}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="chat-main" style={{ transition: 'all 0.25s ease', transform: selectedConversation ? 'translateX(0)' : 'translateX(4px)' }}>
+            {selectedConversation ? (
               <TenantChatContainer
-                key={uniqueKey}
-                conversation={conversation}
+                key={selectedKey}
+                conversation={selectedConversation}
                 currentUser={currentUser}
                 isDarkMode={isDarkMode}
               />
-            );
-          })}
+            ) : (
+              <div className="no-chat-selected">
+                <h4>Select a conversation</h4>
+                <p>Choose a tenant card to view and reply</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

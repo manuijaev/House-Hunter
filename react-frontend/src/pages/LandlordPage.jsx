@@ -8,7 +8,8 @@ import {
   updateDoc,
   deleteDoc,
   doc,
-  where
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
@@ -108,6 +109,46 @@ useEffect(() => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
     localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+  };
+
+  // ----------------------------
+  // Firebase safe helpers
+  // ----------------------------
+  const getFirebaseHouseDocsById = async (houseId) => {
+    try {
+      const housesCol = collection(db, 'houses');
+      const byIdQuery = query(housesCol, where('id', '==', String(houseId)));
+      const byIdSnap = await getDocs(byIdQuery);
+      if (!byIdSnap.empty) return byIdSnap.docs;
+
+      // Fallback: landlord-owned docs (may include multiple)
+      if (currentUser?.uid) {
+        const byOwnerQuery = query(housesCol, where('landlordId', '==', currentUser.uid));
+        const byOwnerSnap = await getDocs(byOwnerQuery);
+        return byOwnerSnap.docs || [];
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const safeUpdateFirebaseHouse = async (houseId, updates) => {
+    try {
+      const docsToUpdate = await getFirebaseHouseDocsById(houseId);
+      await Promise.all(docsToUpdate.map(d => updateDoc(d.ref, updates)));
+    } catch (e) {
+      // best-effort; ignore
+    }
+  };
+
+  const safeDeleteFirebaseHouse = async (houseId) => {
+    try {
+      const docsToDelete = await getFirebaseHouseDocsById(houseId);
+      await Promise.all(docsToDelete.map(d => deleteDoc(d.ref)));
+    } catch (e) {
+      // best-effort; ignore
+    }
   };
 
   
@@ -305,24 +346,36 @@ useEffect(() => {
   // Create house: keep original Firebase write AND also send to Django (non-destructive)
   const handleAddHouse = async (houseData) => {
     try {
-      const houseWithLandlord = {
+      const basePayload = {
         ...houseData,
         landlordId: currentUser.uid,
         landlordName: houseData.displayName || currentUser.displayName || 'Landlord',
         createdAt: new Date().toISOString(),
         isVacant: true,
-        approval_status: 'pending' // Default to pending for new houses
+        approval_status: 'pending'
       };
 
-      // Send to Django first (primary backend)
-      const djangoHouse = await djangoAPI.createHouse(houseWithLandlord);
+      // Create in Django (source of truth)
+      const djangoHouse = await djangoAPI.createHouse(basePayload);
+      const createdId = String(djangoHouse?.id ?? djangoHouse?.pk ?? Date.now());
 
-      // Update local state immediately with the Django response (includes ID and status)
-      setHouses(prev => [...prev, { ...djangoHouse, approval_status: 'pending' }]);
+      const newHouse = {
+        ...basePayload,
+        ...djangoHouse,
+        id: String(createdId),
+        approval_status: djangoHouse?.approval_status ?? 'pending',
+        isVacant: djangoHouse?.isVacant ?? true
+      };
 
-      // Also send to Firebase for backward compatibility (optional)
+      // Update UI
+      setHouses(prev => [...prev, newHouse]);
+
+      // Best-effort Firebase mirror (optional)
       try {
-        await addDoc(collection(db, 'houses'), houseWithLandlord);
+        await addDoc(collection(db, 'houses'), {
+          ...newHouse,
+          id: String(createdId)
+        });
       } catch (fbErr) {
         console.warn('Firebase create failed (non-critical):', fbErr);
       }
@@ -340,15 +393,14 @@ useEffect(() => {
   // Update house: update both Firebase and Django (keeps original behavior + sync)
   const handleUpdateHouse = async (houseId, updates) => {
     try {
-      // Firestore update (original)
-      await updateDoc(doc(db, 'houses', houseId), updates);
+      // Update Django first
+      await djangoAPI.updateHouse(houseId, updates);
 
-      // Django update (sync) - best-effort
-      try {
-        await djangoAPI.updateHouse(houseId, updates);
-      } catch (djErr) {
-        console.warn('Django update failed for house', houseId, djErr);
-      }
+      // Update UI state
+      setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updates } : h));
+
+      // Best-effort Firebase mirror if matching docs exist
+      safeUpdateFirebaseHouse(houseId, updates);
 
       toast.success('House updated successfully!');
       setEditingHouse(null);
@@ -364,15 +416,18 @@ useEffect(() => {
     if (!window.confirm('Are you sure you want to delete this house?')) return;
 
     try {
-      // Firestore delete (original)
-      await deleteDoc(doc(db, 'houses', houseId));
-
-      // Django delete (attempt)
+      // Delete in Django (primary)
       try {
         await djangoAPI.deleteHouse(houseId);
       } catch (djErr) {
-        console.warn('Django delete failed (house may not exist there):', djErr);
+        console.warn('Django delete failed (may already be removed):', djErr);
       }
+
+      // Optimistically update UI
+      setHouses(prev => prev.filter(h => String(h.id) !== String(houseId)));
+
+      // Best-effort Firebase cleanup
+      safeDeleteFirebaseHouse(houseId);
 
       toast.success('House deleted successfully!');
     } catch (error) {

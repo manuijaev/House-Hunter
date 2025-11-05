@@ -36,8 +36,9 @@ class HouseListCreateView(generics.ListCreateAPIView):
         """
         Landlord posts a house (auto set to pending until admin approves).
         """
+        landlord_name = serializer.validated_data.get('landlord_name') or "Test Landlord"
         house = serializer.save(
-            landlord_name="Test Landlord",  # Replace with request.user.username once auth works
+            landlord_name=landlord_name,  # Replace with request.user.username once auth works
             approval_status='pending'
         )
         
@@ -59,8 +60,9 @@ class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def update(self, request, *args, **kwargs):
         """Override update to broadcast status changes to Firebase"""
-        partial = True  # ✅ Allow partial updates
-        response = super().update(request, *args, **kwargs, partial=partial)
+        # Ensure partial updates without duplicating the 'partial' kwarg
+        kwargs['partial'] = True
+        response = super().update(request, *args, **kwargs)
 
         if response.status_code == 200:
             house = self.get_object()
