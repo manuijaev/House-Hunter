@@ -471,6 +471,33 @@ i.landlord-dashboard {
   }
 }
 
+@media (max-width: 1024px) {
+  .houses-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-content {
+    padding: 1rem 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+}
+
 .theme-btn {
   display: flex;
   align-items: center;

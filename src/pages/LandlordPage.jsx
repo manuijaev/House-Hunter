@@ -8,7 +8,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
-import { djangoAPI } from '../services/djangoAPI'; // ADD THIS IMPORT
+import { toast } from "react-hot-toast";
+import { djangoAPI } from "../services/djangoAPI";
 import { clearAllImagesFromLocalStorage } from '../utils/LocalStorage';
 import {
   Plus,
@@ -22,7 +23,6 @@ import {
   Trash2,
   RotateCcw
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import HouseCard from '../components/HouseCard';
 import AddHouseModal from '../components/AddHouseModal';
 import LandlordChats from '../components/LandlordChats';
@@ -151,47 +151,131 @@ function LandlordDashboard() {
     setShowAddModal(true);
   };
  
-  const handleDeleteHouse = async (houseId) => {
-    if (window.confirm('Are you sure you want to delete this house?')) {
-      try {
-        console.log('Deleting house:', houseId);
+  // Listen for house deletion events (dispatched by HouseCard fallback)
+  useEffect(() => {
+    // existing init logic...
+   const onHouseDeleted = (e) => {
+     try {
+       const deletedId = e?.detail?.houseId;
+       if (deletedId) {
+         setHouses((prev) => prev.filter((h) => h.id !== deletedId));
+       } else {
+         // If no id provided, refresh full list as fallback
+         // (reuse existing fetch logic if present)
+         // safe: avoid toast/overlay on auto refresh
+         // You may call your existing fetch method here if available
+       }
+     } catch (err) {
+       console.warn("Error handling house:deleted event:", err);
+     }
+   };
+   window.addEventListener("house:deleted", onHouseDeleted);
 
-        // Use Django API instead of Firestore
-        await djangoAPI.deleteHouse(houseId);
-        toast.success('House deleted successfully!');
+   return () => {
+     window.removeEventListener("house:deleted", onHouseDeleted);
+   };
+  }, [currentUser]);
 
-        // Refresh houses list
-        const updatedHouses = await djangoAPI.getMyHouses();
-        setHouses(updatedHouses);
-      } catch (error) {
-        console.error('Error deleting house:', error);
-        toast.error('Error deleting house: ' + error.message);
+  // Robust delete handler: accept id string or house object, fallback to Django API and update state
+  const handleDeleteHouse = async (idOrHouse) => {
+    // normalize id
+    const id =
+      typeof idOrHouse === "string"
+        ? idOrHouse
+        : idOrHouse && (idOrHouse.id || idOrHouse.houseId || idOrHouse._id);
+
+    if (!id) {
+      toast.error("Unable to determine house id to delete");
+      return;
+    }
+
+    if (!window.confirm("Delete this house? This action cannot be undone.")) return;
+
+    try {
+      if (typeof djangoAPI?.deleteHouse === "function") {
+        // djangoAPI.deleteHouse may return a Response or an object; handle both
+        const resp = await djangoAPI.deleteHouse(id);
+        // if resp has ok/status, check it
+        if (resp && typeof resp === "object" && "ok" in resp && !resp.ok) {
+          throw new Error(`Server returned status ${resp.status || "error"}`);
+        }
+      } else {
+        console.warn("djangoAPI.deleteHouse not available; ensure backend is deleted elsewhere");
       }
+
+      setHouses((prev) => prev.filter((h) => h.id !== id));
+      toast.success("House deleted");
+    } catch (error) {
+      console.error("Error deleting house:", error);
+      const msg = error?.message || (typeof error === "string" ? error : "Unknown error");
+      toast.error("Failed to delete house: " + msg);
     }
   };
-  // 🎯 ADD THIS EXACT FUNCTION - IT'S MISSING FROM YOUR CODE
-  const handleUpdateHouse = async (houseId, updates) => {
+ 
+  const handleUpdateHouse = async (houseIdOrObj, updatesInput) => {
+    // normalize id
+    const houseId =
+      typeof houseIdOrObj === "string"
+        ? houseIdOrObj
+        : houseIdOrObj && (houseIdOrObj.id || houseIdOrObj.houseId || houseIdOrObj._id);
+
+    if (!houseId) {
+      toast.error("Unable to determine house id to update");
+      return;
+    }
+
+    // normalize updates payload (accept object, FormData, or JSON string)
+    let updates = updatesInput;
     try {
-      console.log('🔄 UPDATE HOUSE CALLED:');
-      console.log('House ID:', houseId);
-      console.log('Updates data:', updates);
+      if (updatesInput instanceof FormData) {
+        updates = Object.fromEntries(updatesInput.entries());
+      } else if (typeof updatesInput === "string") {
+        try {
+          updates = JSON.parse(updatesInput);
+        } catch {
+          // keep as string fallback
+        }
+      }
+      if (typeof updates !== "object" || updates === null) {
+        // ensure updates is an object
+        updates = { value: updates };
+      }
+    } catch (normErr) {
+      console.warn("Failed to normalize updates payload:", normErr);
+      updates = { value: updatesInput };
+    }
 
-      // Use Django API instead of Firestore
+    try {
       const response = await djangoAPI.updateHouse(houseId, updates);
-      console.log('✅ Django update response:', response);
 
-      toast.success('House updated successfully!');
+      // handle different response shapes
+      if (response && typeof response === "object") {
+        // if response indicates error via 'error' or 'detail' or status
+        if ("error" in response || "detail" in response) {
+          const msg = response.error || response.detail || JSON.stringify(response);
+          throw new Error(msg);
+        }
+      }
+
+      toast.success("House updated successfully!");
       setEditingHouse(null);
 
-      // Refresh houses list
-      const updatedHouses = await djangoAPI.getMyHouses();
-      setHouses(updatedHouses);
+      // Refresh houses list (safe call)
+      try {
+        const updatedHouses = await djangoAPI.getMyHouses();
+        setHouses(Array.isArray(updatedHouses) ? updatedHouses : []);
+      } catch (refreshErr) {
+        console.warn("Could not refresh houses after update:", refreshErr);
+      }
     } catch (error) {
-      console.error('❌ Error updating house:', error);
-      toast.error('Error updating house: ' + error.message);
+      console.error("Error updating house:", error);
+      const msg =
+        error?.message ||
+        (typeof error === "string" ? error : "Unknown error updating house");
+      toast.error("Error updating house: " + msg);
     }
   };
-
+ 
   // 🎯 ADD MISSING TOGGLE VACANCY FUNCTION
 // Toggles house vacancy and updates the backend
 const handleToggleVacancy = async (houseId, isVacant) => {
@@ -216,9 +300,6 @@ const handleToggleVacancy = async (houseId, isVacant) => {
     toast.error('Could not update vacancy status');
   }
 };
-
-
-
 
   const handleLogout = async () => {
     try {

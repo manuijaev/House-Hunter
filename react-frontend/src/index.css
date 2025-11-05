@@ -35,6 +35,31 @@ h1 {
   line-height: 1.1;
 }
 
+/* Responsive base utilities */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Mobile layout adjustments */
+@media (max-width: 768px) {
+  body {
+    display: block;
+    place-items: initial;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 2rem;
+    line-height: 1.2;
+  }
+
+  button {
+    padding: 0.7em 1em;
+    font-size: 0.95em;
+  }
+}
+
 button {
   border-radius: 8px;
   border: 1px solid transparent;

@@ -499,3 +499,24 @@ GLOWING BORDER FOR AI RECOMMENDED HOUSES */
     justify-content: center;
   }
 }
+
+@media (max-width: 768px) {
+  .house-image {
+    height: 200px;
+  }
+
+  .image-nav-btn {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .house-image {
+    height: 160px;
+  }
+
+  .image-counter {
+    font-size: 0.75rem;
+  }
+}

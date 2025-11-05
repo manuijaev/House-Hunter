@@ -13,6 +13,8 @@ import {
   House
 } from 'lucide-react';
 import '../components/HouseCard.css';
+import { toast } from 'react-hot-toast';
+import { djangoAPI } from '../services/djangoAPI';
 
 function HouseCard({
   house,
@@ -69,6 +71,44 @@ function HouseCard({
   };
   const approvalStatus = house.approval_status || 'pending';
 
+
+  // New: handle delete with parent fallback, or call Django API directly
+  const handleDeleteClick = async (e) => {
+    e.stopPropagation?.();
+    // If parent provided onDelete, delegate to it (parent can show confirmation)
+    if (typeof onDelete === 'function') {
+      try {
+        await onDelete(house.id);
+      } catch (err) {
+        console.error('HouseCard: parent onDelete failed:', err);
+        toast.error('Failed to delete house');
+      }
+      return;
+    }
+
+    // No parent handler: prompt and delete via Django API directly
+    if (!window.confirm('Are you sure you want to delete this house? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await djangoAPI.deleteHouse(house.id);
+      toast.success('House deleted');
+      // Optionally remove UI: if parent didn't refresh, reload to reflect change
+      // Prefer not to force full reload, but ensure UI updated:
+      // dispatch a custom event so parent pages can listen and refresh
+      try {
+        window.dispatchEvent(new CustomEvent('house:deleted', { detail: { houseId: house.id } }));
+      } catch (evErr) {
+        // fallback: reload
+        console.warn('Failed to dispatch house:deleted event, reloading page', evErr);
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('HouseCard: failed to delete via Django API', error);
+      toast.error('Failed to delete house: ' + (error?.message || ''));
+    }
+  };
 
   return (
     <div
@@ -188,7 +228,7 @@ function HouseCard({
             <div className="action-buttons">
               <button
                 className="chat-btn"
-                onClick={() => onChat(house)}
+                onClick={() => onChat && onChat(house)}
                 style={{ position: 'relative' }}
               >
                 <MessageCircle size={16} />
@@ -241,7 +281,7 @@ function HouseCard({
               </button>
               <button
                 className="delete-btn"
-                onClick={() => onDelete && onDelete(house.id)}
+                onClick={handleDeleteClick}
               >
                 Delete
               </button>
