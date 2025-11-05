@@ -1,44 +1,63 @@
 """
 Django settings for backend project.
 """
+import json
 import firebase_admin
 from firebase_admin import credentials
 from pathlib import Path
 import os
 from datetime import timedelta
 
+# Load environment variables from a .env file if available
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Initialize Firebase Admin SDK safely (dev-friendly)
+# Initialize Firebase Admin SDK safely (dev- and prod-friendly)
 try:
     if not firebase_admin._apps:
-        SERVICE_ACCOUNT_PATH = os.getenv(
-            'FIREBASE_SERVICE_ACCOUNT_PATH',
-            str(Path(__file__).resolve().parent / "firebase_service_key.json"),
-        )
         FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT') or 'house-hunter-1-2e9f1'
 
-        if SERVICE_ACCOUNT_PATH and os.path.exists(SERVICE_ACCOUNT_PATH):
-            cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-            firebase_admin.initialize_app(cred, {
-                'projectId': FIREBASE_PROJECT_ID,
-            })
+        # 1) Prefer explicit JSON from env (FIREBASE_CREDENTIALS_JSON)
+        creds_json_str = os.getenv('FIREBASE_CREDENTIALS_JSON')
+        # 2) Then explicit path from env
+        service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH') or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        # 3) As a last resort, use local dev file if present
+        default_local_path = str(Path(__file__).resolve().parent / "firebase_service_key.json")
+
+        if creds_json_str:
+            try:
+                creds_dict = json.loads(creds_json_str)
+                cred = credentials.Certificate(creds_dict)
+                firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
+            except Exception as e:
+                print(f"Invalid FIREBASE_CREDENTIALS_JSON: {e}")
+                raise
+        elif service_account_path and os.path.exists(service_account_path):
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
+        elif os.path.exists(default_local_path):
+            # Dev-only fallback; ensure this file is gitignored
+            cred = credentials.Certificate(default_local_path)
+            firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
         else:
-            # Initialize with explicit projectId so verification works without a key in dev
-            firebase_admin.initialize_app(options={
-                'projectId': FIREBASE_PROJECT_ID,
-            })
+            # Initialize with explicit projectId so verification works without a key in dev/CI
+            firebase_admin.initialize_app(options={ 'projectId': FIREBASE_PROJECT_ID })
 except Exception as e:
     print(f"Firebase init warning (settings): {e}")
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key-here'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-secret-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
 
 # Application definition
 INSTALLED_APPS = [
@@ -93,13 +112,14 @@ DATABASES = {
 }
 
 # CORS settings - allow React app to communicate with Django
-# Add these CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+# For production, prefer explicit origins via env; in dev you can allow all
+cors_allow_all = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() in ('1', 'true', 'yes')
+# In DEBUG, allow all origins to simplify local development
+CORS_ALLOW_ALL_ORIGINS = True if DEBUG else cors_allow_all
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React development server
-    "http://127.0.0.1:3000",
-]
+# Include common dev ports (3000, 5173) by default; override with env in prod
+_cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173')
+CORS_ALLOWED_ORIGINS = [o for o in _cors_origins_env.split(',') if o]
 
 CORS_ALLOW_CREDENTIALS = True
 
