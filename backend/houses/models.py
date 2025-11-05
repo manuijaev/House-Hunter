@@ -26,6 +26,9 @@ class House(models.Model):
     # 🎯 MAKE LANDLORD OPTIONAL TEMPORARILY
     landlord = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     landlord_name = models.CharField(max_length=100, default='Landlord')
+    # Firebase identity for landlord scoping
+    landlord_uid = models.CharField(max_length=128, blank=True, default='')
+    landlord_email = models.EmailField(blank=True)
     
     # Status fields
     is_vacant = models.BooleanField(default=True)
@@ -34,6 +37,8 @@ class House(models.Model):
         choices=APPROVAL_STATUS, 
         default='pending'
     )
+    # Reason why a house is pending (e.g., edited fields or vacancy change)
+    pending_reason = models.TextField(blank=True, default='')
     
     # Availability (from React form)
     available_date = models.DateField(null=True, blank=True)

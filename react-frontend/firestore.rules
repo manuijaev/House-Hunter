@@ -18,5 +18,11 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read, write: if request.auth != null;
     }
+
+    // House status updates (written by backend via Admin SDK; readable by clients)
+    match /house_status_updates/{docId} {
+      allow read: if true; // public read for live status
+      allow write: if false; // backend Admin SDK only
+    }
   }
 }

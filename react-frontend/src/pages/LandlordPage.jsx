@@ -157,9 +157,18 @@ useEffect(() => {
     try {
       const data = await djangoAPI.getLandlordHouses(currentUser.uid);
       const housesArray = Array.isArray(data) ? data : [];
-      setHouses([...housesArray]);
+      // Ensure approval_status is properly set from Django (source of truth)
+      const housesWithStatus = housesArray.map(house => ({
+        ...house,
+        approval_status: house.approval_status || 'pending', // Ensure status exists
+        // Preserve updated_at for timestamp comparison
+        updated_at: house.updated_at || house.created_at || new Date().toISOString()
+      }));
+      setHouses([...housesWithStatus]);
+      return housesWithStatus;
     } catch (err) {
       console.error('Error refreshing houses:', err);
+      return [];
     }
   }, [currentUser]);
   // ----------------------------------------------------------------------
@@ -169,29 +178,49 @@ useEffect(() => {
     if (!currentUser?.uid) return;
 
     let unsubscribe = null;
+    let djangoDataLoaded = false; // Flag to ensure Django data is loaded first
+    let isFirstSnapshot = true; // Skip the first Firebase snapshot (stale data)
+    
+    // Fetch Django data first (source of truth)
+    refreshHouses().then(() => {
+      djangoDataLoaded = true;
+      // After Django loads, allow Firebase updates (but skip first snapshot)
+      setTimeout(() => {
+        isFirstSnapshot = false;
+      }, 1000); // Give Django 1 second to fully load
+    });
     
     // Listen to all house status updates and filter for landlord's houses
     import('../utils/houseStatusListener').then(({ listenToAllHouseStatus }) => {
       unsubscribe = listenToAllHouseStatus((statusUpdates) => {
+        // Skip first snapshot (stale Firebase data) and wait for Django
+        if (isFirstSnapshot || !djangoDataLoaded) {
+          console.log('Skipping Firebase update - waiting for Django source of truth');
+          isFirstSnapshot = false; // Mark as processed
+          return;
+        }
+        
         // Update houses when status changes are detected (only for houses we own)
+        // Django is source of truth, Firebase is only for real-time incremental updates
         setHouses(prevHouses => {
           return prevHouses.map(house => {
             const statusUpdate = statusUpdates[String(house.id)];
-            if (statusUpdate) {
-              // Verify this is the landlord's house (by checking if it's in our list)
-              return {
-                ...house,
-                approval_status: statusUpdate.approval_status || house.approval_status,
-                isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
-              };
+            if (statusUpdate && statusUpdate.approval_status) {
+              // Only update if Firebase has a different status (real-time change occurred)
+              // This ensures we get admin approval updates in real-time
+              if (statusUpdate.approval_status !== house.approval_status) {
+                console.log(`Real-time status update for house ${house.id}: ${house.approval_status} -> ${statusUpdate.approval_status}`);
+                return {
+                  ...house,
+                  approval_status: statusUpdate.approval_status,
+                  isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
+                };
+              }
             }
             return house;
           });
         });
       });
-
-      // Initial fetch
-      refreshHouses();
     }).catch(err => {
       console.error('Failed to set up house status listener, falling back to polling:', err);
       // Fallback to polling if Firebase listener fails
@@ -201,7 +230,6 @@ useEffect(() => {
         }
       }, 10000); // Poll every 10 seconds as fallback
       
-      refreshHouses();
       return () => clearInterval(interval);
     });
 
@@ -393,11 +421,11 @@ useEffect(() => {
   // Update house: update both Firebase and Django (keeps original behavior + sync)
   const handleUpdateHouse = async (houseId, updates) => {
     try {
-      // Update Django first
-      await djangoAPI.updateHouse(houseId, updates);
+      // Update Django first and use the authoritative response
+      const updated = await djangoAPI.updateHouse(houseId, updates);
 
-      // Update UI state
-      setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updates } : h));
+      // Update UI state with backend truth (includes approval_status changes)
+      setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
 
       // Best-effort Firebase mirror if matching docs exist
       safeUpdateFirebaseHouse(houseId, updates);
@@ -508,11 +536,12 @@ useEffect(() => {
         )
       );
   
-      // ✅ Save to Django (make sure both keys are sent)
-      await djangoAPI.updateHouse(houseId, {
+      // ✅ Save to Django and use returned status to avoid badge drift
+      const updated = await djangoAPI.updateHouse(houseId, {
         isVacant,
         is_vacant: isVacant
       });
+      setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
   
       // ✅ Also sync to Firebase (optional)
       try {

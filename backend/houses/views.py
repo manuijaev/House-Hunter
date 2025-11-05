@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions, status
+from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.db.models import Q
@@ -16,7 +17,15 @@ except ImportError:
 # 🏠 Public + Landlord view: List approved houses / Create new pending house
 class HouseListCreateView(generics.ListCreateAPIView):
     serializer_class = HouseSerializer
-    permission_classes = [permissions.AllowAny]  # TODO: switch to IsAuthenticated for landlords later
+
+    def get_permissions(self):
+        # In dev, unblock auth to avoid 403s during setup
+        if getattr(settings, 'DEBUG', False):
+            return [permissions.AllowAny()]
+        # Public can GET approved/vacant houses; auth required to POST (create)
+        if self.request.method in ('GET',):
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         """
@@ -37,9 +46,14 @@ class HouseListCreateView(generics.ListCreateAPIView):
         Landlord posts a house (auto set to pending until admin approves).
         """
         landlord_name = serializer.validated_data.get('landlord_name') or "Test Landlord"
+        # Attach landlord identity from Firebase-authenticated user when available
+        landlord_uid = getattr(getattr(self.request, 'user', None), 'uid', None)
+        landlord_email = getattr(getattr(self.request, 'user', None), 'email', None)
         house = serializer.save(
             landlord_name=landlord_name,  # Replace with request.user.username once auth works
-            approval_status='pending'
+            approval_status='pending',
+            landlord_uid=landlord_uid or serializer.validated_data.get('landlord_uid') or '',
+            landlord_email=landlord_email or serializer.validated_data.get('landlord_email') or ''
         )
         
         # Broadcast initial status to Firebase for real-time updates
@@ -48,7 +62,8 @@ class HouseListCreateView(generics.ListCreateAPIView):
             house_id=house.id,
             approval_status='pending',
             is_vacant=house.is_vacant,
-            landlord_id=landlord_id
+            landlord_id=house.landlord_uid or landlord_id,
+            pending_reason='New listing awaiting admin review'
         )
 
 
@@ -56,22 +71,37 @@ class HouseListCreateView(generics.ListCreateAPIView):
 class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = House.objects.all()
     serializer_class = HouseSerializer
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        # In dev, allow all to simplify local testing
+        if getattr(settings, 'DEBUG', False):
+            return [permissions.AllowAny()]
+        # AllowAny to GET details; require auth to modify/delete
+        if self.request.method in ('GET',):
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def update(self, request, *args, **kwargs):
         """Override update to broadcast status changes to Firebase"""
         # Ensure partial updates without duplicating the 'partial' kwarg
         kwargs['partial'] = True
+        # Fetch original for reason computation after response
+        instance_before = self.get_object()
+        prev_status = instance_before.approval_status
+        prev_is_vacant = instance_before.is_vacant
+
         response = super().update(request, *args, **kwargs)
 
         if response.status_code == 200:
             house = self.get_object()
             landlord_id = str(house.landlord.id) if house.landlord else None
+            pending_reason = getattr(house, 'pending_reason', '') or None
             update_house_status_in_firebase(
                 house_id=house.id,
                 approval_status=house.approval_status,
                 is_vacant=house.is_vacant,
-                landlord_id=landlord_id
+                landlord_id=landlord_id,
+                pending_reason=pending_reason
             )
 
         return response
@@ -81,14 +111,28 @@ class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
 # 🧱 Landlord dashboard (show their own houses)
 class LandlordHousesView(generics.ListAPIView):
     serializer_class = HouseSerializer
-    permission_classes = [permissions.AllowAny]  # TODO: IsAuthenticated later
+    # In dev, allow access without auth; in prod require auth
+    def get_permissions(self):
+        if getattr(settings, 'DEBUG', False):
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         """
         Show all houses for landlord dashboard (they see all their houses with status badges).
         TODO: Filter by authenticated landlord when auth is implemented.
         """
-        return House.objects.all()  # For now, return all houses
+        # Prioritize Firebase authenticated user
+        request_user = getattr(self.request, 'user', None)
+        uid = getattr(request_user, 'uid', None)
+        if uid:
+            return House.objects.filter(landlord_uid=uid)
+        # Fallback to query parameter (useful in DEBUG/dev when auth is open)
+        uid_param = self.request.query_params.get('landlord_uid') or self.request.query_params.get('uid')
+        if uid_param:
+            return House.objects.filter(landlord_uid=uid_param)
+        # If we cannot determine landlord, return empty queryset
+        return House.objects.none()
 
 
 # 🛠️ Admin-only endpoints: Approve / Reject houses

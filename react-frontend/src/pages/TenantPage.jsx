@@ -61,6 +61,9 @@ function TenantPage() {
         setFilteredHouses(filtered);
       } catch (error) {
         console.error('TenantPage: Django API error:', error);
+        // Ensure UI reflects that there are no Django houses available
+        setHouses([]);
+        setFilteredHouses([]);
       }
     };
 
@@ -71,8 +74,9 @@ function TenantPage() {
     
     try {
       unsubscribe = listenToAllHouseStatus((statusUpdates) => {
-        // Update houses when status changes are detected
+        // Only update if we already have houses from Django; never introduce new ones from Firebase
         setHouses(prevHouses => {
+          if (!Array.isArray(prevHouses) || prevHouses.length === 0) return prevHouses;
           const updatedHouses = prevHouses.map(house => {
             const statusUpdate = statusUpdates[String(house.id)];
             if (statusUpdate) {
@@ -84,28 +88,13 @@ function TenantPage() {
             }
             return house;
           });
-          
-          // Filter to ensure only approved and vacant houses are shown
+
           const filtered = updatedHouses.filter(
             house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
           );
-          
-          // Also add new houses that were just approved (if they're not in the list yet)
-          Object.keys(statusUpdates).forEach(houseId => {
-            const statusUpdate = statusUpdates[houseId];
-            if (statusUpdate.approval_status === 'approved' && 
-                (statusUpdate.isVacant === true || statusUpdate.isVacant === undefined)) {
-              // Check if house already exists in the list
-              const exists = updatedHouses.some(h => String(h.id) === houseId);
-              if (!exists && statusUpdate.approval_status === 'approved') {
-                // Fetch full house data from API
-                fetchHouses();
-              }
-            }
-          });
-          
+
           setFilteredHouses(filtered);
-          return filtered;
+          return updatedHouses;
         });
       });
     } catch (err) {

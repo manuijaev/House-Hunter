@@ -1,13 +1,36 @@
 """
 Django settings for backend project.
 """
-
+import firebase_admin
+from firebase_admin import credentials
 from pathlib import Path
 import os
 from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Initialize Firebase Admin SDK safely (dev-friendly)
+try:
+    if not firebase_admin._apps:
+        SERVICE_ACCOUNT_PATH = os.getenv(
+            'FIREBASE_SERVICE_ACCOUNT_PATH',
+            str(Path(__file__).resolve().parent / "firebase_service_key.json"),
+        )
+        FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT') or 'house-hunter-1-2e9f1'
+
+        if SERVICE_ACCOUNT_PATH and os.path.exists(SERVICE_ACCOUNT_PATH):
+            cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+            firebase_admin.initialize_app(cred, {
+                'projectId': FIREBASE_PROJECT_ID,
+            })
+        else:
+            # Initialize with explicit projectId so verification works without a key in dev
+            firebase_admin.initialize_app(options={
+                'projectId': FIREBASE_PROJECT_ID,
+            })
+except Exception as e:
+    print(f"Firebase init warning (settings): {e}")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-your-secret-key-here'
@@ -86,7 +109,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
+        'houses.auth.FirebaseAuthentication',
     ],
 }
 

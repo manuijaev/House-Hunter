@@ -72,7 +72,9 @@ export const djangoAPI = {
   },
 
   getLandlordHouses: async (landlordId) => {
-    return await makeApiCall('/my-houses/');
+    const uid = encodeURIComponent(landlordId || '');
+    const qp = uid ? `?landlord_uid=${uid}` : '';
+    return await makeApiCall(`/my-houses/${qp}`);
   },
 
   createHouse: async (houseData) => {
