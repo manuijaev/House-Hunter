@@ -10,11 +10,14 @@ import {
   ArrowRight,
   Phone,
   Mail,
-  House
+  House,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import '../components/HouseCard.css';
 import { toast } from 'react-hot-toast';
 import { djangoAPI } from '../services/djangoAPI';
+import { useAuth } from '../contexts/AuthContext';
 
 function HouseCard({
   house,
@@ -28,13 +31,23 @@ function HouseCard({
   messageCount = 0,
   isRecommended = false
 }) {
+  const { currentUser } = useAuth();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house.isVacant);
+  const [isPaid, setIsPaid] = useState(false);
 
   // Update local state when house prop changes
   useEffect(() => {
     setIsVacant(house.isVacant);
   }, [house.isVacant]);
+
+  // Check if tenant has paid for this specific house
+  useEffect(() => {
+    if (userType === 'tenant' && currentUser?.uid) {
+      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+      setIsPaid(paidHouses.includes(String(house.id)));
+    }
+  }, [userType, currentUser, house.id]);
 
   const nextImage = () => {
     if (!house.images || house.images.length <= 1) return;
@@ -186,28 +199,44 @@ function HouseCard({
             <span>{house.size || 'N/A'}</span>
           </div>
 
-          <div className="detail-item">
-            <User size={16} />
-            <span>{house.landlordName || 'Unknown'}</span>
-          </div>
-
-          <div className="detail-item">
-            <Calendar size={16} />
-            <span>Available: {house.availableDate || 'Immediately'}</span>
-          </div>
-
-          {house.contactPhone && (
+          {userType === 'tenant' && !isPaid ? (
+            <div className="detail-item locked">
+              <Lock size={16} />
+              <span>Landlord info locked - Pay to unlock</span>
+            </div>
+          ) : (
             <div className="detail-item">
-              <Phone size={16} />
-              <span>{house.contactPhone}</span>
+              <User size={16} />
+              <span>{house.landlordName || house.landlord_name || 'Unknown'}</span>
             </div>
           )}
 
-          {house.contactEmail && (
-            <div className="detail-item">
-              <Mail size={16} />
-              <span>{house.contactEmail}</span>
+          <div className="detail-item">
+            <Calendar size={16} />
+            <span>Available: {house.availableDate || house.available_date || 'Immediately'}</span>
+          </div>
+
+          {userType === 'tenant' && !isPaid ? (
+            <div className="detail-item locked">
+              <Lock size={16} />
+              <span>Contact info locked - Pay to unlock</span>
             </div>
+          ) : (
+            <>
+              {(house.contactPhone || house.contact_phone) && (
+                <div className="detail-item">
+                  <Phone size={16} />
+                  <span>{house.contactPhone || house.contact_phone}</span>
+                </div>
+              )}
+
+              {(house.contactEmail || house.contact_email) && (
+                <div className="detail-item">
+                  <Mail size={16} />
+                  <span>{house.contactEmail || house.contact_email}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -226,42 +255,61 @@ function HouseCard({
 
           {userType === 'tenant' && isVacant && (
             <div className="action-buttons">
-              <button
-                className="chat-btn"
-                onClick={() => onChat && onChat(house)}
-                style={{ position: 'relative' }}
-              >
-                <MessageCircle size={16} />
-                Chat
-                {messageCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '-8px',
-                      right: '-8px',
-                      background: '#dc3545',
-                      color: 'white',
-                      borderRadius: '50%',
-                      width: '18px',
-                      height: '18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '11px',
-                      fontWeight: 'bold'
-                    }}
+              {isPaid ? (
+                <>
+                  <button
+                    className="chat-btn unlocked"
+                    onClick={() => onChat && onChat(house)}
+                    style={{ position: 'relative' }}
                   >
-                    {messageCount > 99 ? '99+' : messageCount}
-                  </span>
-                )}
-              </button>
-              <button
-                className="payment-btn"
-                onClick={() => onPayment(house)}
-              >
-                <CreditCard size={16} />
-                Pay Deposit
-              </button>
+                    <Unlock size={16} />
+                    Chat
+                    {messageCount > 0 && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '-8px',
+                          background: '#dc3545',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '18px',
+                          height: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '11px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {messageCount > 99 ? '99+' : messageCount}
+                      </span>
+                    )}
+                  </button>
+                  <div className="paid-badge">
+                    <Unlock size={14} />
+                    Paid & Unlocked
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="chat-btn locked"
+                    disabled
+                    title="Pay to unlock chat feature"
+                  >
+                    <Lock size={16} />
+                    Chat (Locked)
+                  </button>
+                  <button
+                    className="payment-btn"
+                    onClick={() => onPayment(house)}
+                  >
+                    <CreditCard size={16} />
+                    Pay to Unlock
+                  </button>
+                </>
+              )}
             </div>
           )}
 

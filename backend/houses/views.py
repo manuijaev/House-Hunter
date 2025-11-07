@@ -14,7 +14,7 @@ except ImportError:
     def update_house_status_in_firebase(*args, **kwargs):
         pass
 
-# 🏠 Public + Landlord view: List approved houses / Create new pending house
+# Public + Landlord view: List approved houses / Create new pending house
 class HouseListCreateView(generics.ListCreateAPIView):
     serializer_class = HouseSerializer
 
@@ -127,10 +127,20 @@ class LandlordHousesView(generics.ListAPIView):
         uid = getattr(request_user, 'uid', None)
         if uid:
             return House.objects.filter(landlord_uid=uid)
+
         # Fallback to query parameter (useful in DEBUG/dev when auth is open)
-        uid_param = self.request.query_params.get('landlord_uid') or self.request.query_params.get('uid')
+        # Check multiple possible parameter names for landlord ID
+        uid_param = (
+            self.request.GET.get('landlord_uid') or
+            self.request.GET.get('uid') or
+            self.request.GET.get('landlordId') or
+            self.request.GET.get('landlord_id')
+        )
+
         if uid_param:
+            # Filter by landlord_uid field in the database
             return House.objects.filter(landlord_uid=uid_param)
+
         # If we cannot determine landlord, return empty queryset
         return House.objects.none()
 

@@ -261,6 +261,12 @@
   font-size: 0.9rem;
 }
 
+.detail-item.locked {
+  color: #dc3545;
+  font-style: italic;
+  opacity: 0.8;
+}
+
 .house-description {
   color: #666;
   font-size: 0.9rem;
@@ -323,6 +329,25 @@
   color: white;
 }
 
+.chat-btn.locked {
+  background: #f8f9fa;
+  color: #999;
+  border: 1px solid #ddd;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.chat-btn.unlocked {
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+}
+
+.chat-btn.unlocked:hover {
+  background: #218838;
+  color: white;
+}
+
 .payment-btn {
   background: #667eea;
   color: white;
@@ -331,6 +356,18 @@
 .payment-btn:hover {
   background: #5a6fd8;
   transform: translateY(-1px);
+}
+
+.paid-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #28a745;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .landlord-actions {
@@ -442,6 +479,27 @@
 .house-card.dark .chat-btn:hover {
   background: #667eea;
   color: white;
+}
+
+.house-card.dark .chat-btn.locked {
+  background: #2d2d2d;
+  color: #666;
+  border: 1px solid #404040;
+}
+
+.house-card.dark .chat-btn.unlocked {
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+}
+
+.house-card.dark .paid-badge {
+  background: #28a745;
+  color: white;
+}
+
+.house-card.dark .detail-item.locked {
+  color: #ff6b6b;
 }
 
 .house-card.dark .payment-btn {

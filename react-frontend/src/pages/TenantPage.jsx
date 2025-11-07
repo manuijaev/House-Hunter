@@ -351,8 +351,17 @@ function TenantPage() {
   };
 
   const handlePayment = (house) => {
-    // Implement payment functionality
-    toast.success(`Payment initiated for ${house.title}`);
+    // Simulate payment success for now (will be replaced with actual payment integration)
+    if (currentUser?.uid) {
+      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+      if (!paidHouses.includes(String(house.id))) {
+        paidHouses.push(String(house.id));
+        localStorage.setItem(`paid_houses_${currentUser.uid}`, JSON.stringify(paidHouses));
+        toast.success(`Payment successful! You can now chat with the landlord and see full contact details for ${house.title}`);
+      } else {
+        toast.info('You have already paid for this house');
+      }
+    }
   };
 
   // Handle viewing recommendations from chatbot

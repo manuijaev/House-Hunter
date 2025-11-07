@@ -421,8 +421,24 @@ useEffect(() => {
   // Update house: update both Firebase and Django (keeps original behavior + sync)
   const handleUpdateHouse = async (houseId, updates) => {
     try {
+      // Map form field names to Django field names
+      const djangoUpdates = {
+        ...updates,
+        monthly_rent: updates.monthlyRent ? Number(updates.monthlyRent) : undefined,
+        deposit: updates.deposit ? Number(updates.deposit) : undefined,
+        available_date: updates.availableDate,
+        contact_phone: updates.contactPhone,
+        contact_email: updates.contactEmail,
+        landlord_name: updates.displayName
+      };
+
+      // Remove undefined fields
+      Object.keys(djangoUpdates).forEach(key => {
+        if (djangoUpdates[key] === undefined) delete djangoUpdates[key];
+      });
+
       // Update Django first and use the authoritative response
-      const updated = await djangoAPI.updateHouse(houseId, updates);
+      const updated = await djangoAPI.updateHouse(houseId, djangoUpdates);
 
       // Update UI state with backend truth (includes approval_status changes)
       setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
@@ -529,35 +545,37 @@ useEffect(() => {
   // Toggle house vacancy status
   const handleToggleVacancy = async (houseId, isVacant) => {
     try {
+      // Get current house to check approval status
+      const currentHouse = houses.find(h => String(h.id) === String(houseId));
+      if (!currentHouse) {
+        throw new Error('House not found');
+      }
+
+      // Prepare update payload
+      const updatePayload = {
+        isVacant,
+        is_vacant: isVacant
+      };
+
+      // If marking as vacant and currently approved, set status to pending
+      if (isVacant && currentHouse.approval_status === 'approved') {
+        updatePayload.approval_status = 'pending';
+      }
+      // If marking as occupied and currently pending, keep pending
+      // If marking as vacant and currently pending, keep pending
+      // (no change needed for approval_status in these cases)
+
       // Update UI immediately
       setHouses(prev =>
         prev.map(h =>
-          String(h.id) === String(houseId) ? { ...h, isVacant } : h
+          String(h.id) === String(houseId) ? { ...h, isVacant, ...(updatePayload.approval_status ? { approval_status: updatePayload.approval_status } : {}) } : h
         )
       );
-  
-      // ✅ Save to Django and use returned status to avoid badge drift
-      const updated = await djangoAPI.updateHouse(houseId, {
-        isVacant,
-        is_vacant: isVacant
-      });
+
+      // Save to Django only (no Firebase sync)
+      const updated = await djangoAPI.updateHouse(houseId, updatePayload);
       setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
-  
-      // ✅ Also sync to Firebase (optional)
-      try {
-        const { updateHouseStatusInFirebase } = await import('../utils/houseStatusListener');
-        const house = houses.find(h => String(h.id) === String(houseId));
-        if (house) {
-          await updateHouseStatusInFirebase(String(houseId), {
-            approval_status: house.approval_status,
-            is_vacant: isVacant,
-            landlord_id: currentUser.uid
-          });
-        }
-      } catch (fbErr) {
-        console.warn('Firebase sync failed (non-critical):', fbErr);
-      }
-  
+
       toast.success(`House marked as ${isVacant ? 'vacant' : 'occupied'}`);
     } catch (err) {
       console.error('Vacancy toggle error:', err);

@@ -40,12 +40,12 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       description: house?.description || '',
       location: house?.location || '',
       size: house?.size || '',
-      monthlyRent: house?.monthlyRent || '',
+      monthlyRent: house?.monthly_rent || house?.monthlyRent || '',
       deposit: house?.deposit || '',
-      availableDate: house?.availableDate || '',
-      contactPhone: house?.contactPhone || '',
-      contactEmail: house?.contactEmail || '',
-      displayName: house?.displayName || '',
+      availableDate: house?.available_date || house?.availableDate || '',
+      contactPhone: house?.contact_phone || house?.contactPhone || '',
+      contactEmail: house?.contact_email || house?.contactEmail || '',
+      displayName: house?.landlord_name || house?.displayName || '',
       images: house?.images || []
     };
     console.log('Setting form data to:', newFormData);
@@ -159,7 +159,14 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       const houseData = {
         ...formData,
         monthlyRent: Number(formData.monthlyRent),
-        deposit: Number(formData.deposit)
+        deposit: Number(formData.deposit),
+        // Ensure proper field mapping for Django
+        monthly_rent: Number(formData.monthlyRent),
+        deposit: Number(formData.deposit),
+        available_date: formData.availableDate,
+        contact_phone: formData.contactPhone,
+        contact_email: formData.contactEmail,
+        landlord_name: formData.displayName
       };
 
       console.log('Calling onSave with data:', houseData);
