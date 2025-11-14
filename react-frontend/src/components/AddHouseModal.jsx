@@ -7,34 +7,64 @@ import {
   FileText,
   Camera,
   User,
-  House
+  House,
+  Wifi,
+  Car,
+  Droplets,
+  Zap,
+  Shield,
+  Dumbbell,
+  TreePine,
+  Tv,
+  Utensils,
+  Snowflake,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { saveImageToLocalStorage, removeImageFromLocalStorage } from '../utils/LocalStorage';
+import { heicToJpeg } from '../utils/imageConverter';
 import './AddHouseModal.css';
+
+// Amenities configuration with valid icons
+const AMENITIES = [
+  { id: 'wifi', label: 'WiFi', icon: Wifi, category: 'utilities' },
+  { id: 'parking', label: 'Parking Space', icon: Car, category: 'facilities' },
+  { id: 'water', label: 'Running Water', icon: Droplets, category: 'utilities' },
+  { id: 'electricity', label: 'Prepaid Electricity', icon: Zap, category: 'utilities' },
+  { id: 'security', label: 'Security', icon: Shield, category: 'safety' },
+  { id: 'gym', label: 'Gym', icon: Dumbbell, category: 'facilities' },
+  { id: 'garden', label: 'Garden', icon: TreePine, category: 'outdoor' },
+  { id: 'tv', label: 'TV', icon: Tv, category: 'entertainment' },
+  { id: 'furnished', label: 'Furnished', icon: Utensils, category: 'living' },
+  { id: 'ac', label: 'Air Conditioning', icon: Snowflake, category: 'comfort' },
+  { id: 'washing', label: 'Washing Machine', icon: Zap, category: 'utilities' }, // Using Zap as alternative
+];
 
 function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
   const [formData, setFormData] = useState({
-    title: house?.title || '',
-    description: house?.description || '',
-    location: house?.location || '',
-    size: house?.size || '',
-    monthlyRent: house?.monthlyRent || '',
-    deposit: house?.deposit || '',
-    availableDate: house?.availableDate || '',
-    contactPhone: house?.contactPhone || '',
-    contactEmail: house?.contactEmail || '',
-    displayName: house?.displayName || '',
-    images: house?.images || []
+    title: '',
+    description: '',
+    location: '',
+    size: '',
+    monthlyRent: '',
+    deposit: '',
+    availableDate: '',
+    contactPhone: '',
+    contactEmail: '',
+    displayName: '',
+    images: [],
+    amenities: []
   });
 
   const [uploading, setUploading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState([]);
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [activeAmenityCategory, setActiveAmenityCategory] = useState('all');
   const fileInputRef = useRef(null);
 
-  // Reset form when modal opens/closes or house prop changes
+  // Initialize form data
   useEffect(() => {
-    console.log('useEffect triggered, house prop:', house);
     const newFormData = {
       title: house?.title || '',
       description: house?.description || '',
@@ -46,24 +76,40 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       contactPhone: house?.contact_phone || house?.contactPhone || '',
       contactEmail: house?.contact_email || house?.contactEmail || '',
       displayName: house?.landlord_name || house?.displayName || '',
-      images: house?.images || []
+      images: house?.images || [],
+      amenities: house?.amenities || []
     };
-    console.log('Setting form data to:', newFormData);
+    
     setFormData(newFormData);
+    setSelectedAmenities(house?.amenities || []);
   }, [house]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [name]: value
+    }));
+  };
+
+  const toggleAmenity = (amenityId) => {
+    setSelectedAmenities(prev => {
+      const newAmenities = prev.includes(amenityId)
+        ? prev.filter(id => id !== amenityId)
+        : [...prev, amenityId];
+      
+      // Update form data with amenities
+      setFormData(prev => ({
+        ...prev,
+        amenities: newAmenities
+      }));
+      
+      return newAmenities;
     });
   };
 
   const handleImageUpload = async (files) => {
     const imageFiles = Array.from(files);
-
-    // No file size validation - allow any image size
 
     // Check total number of images
     if (formData.images.length + imageFiles.length > 10) {
@@ -76,33 +122,38 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
 
     try {
       const uploadPromises = imageFiles.map(async (file, index) => {
-        console.log(`Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
-        const startTime = Date.now();
+        console.log(`Processing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
 
-        const imageData = await saveImageToLocalStorage(file, 45000); // 45 second timeout
+        let processedFile = file;
 
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-        console.log(`${file.name} uploaded in ${duration.toFixed(2)}s`);
+        // Convert HEIC to JPEG if needed
+        if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+          try {
+            toast.loading(`Converting HEIC image: ${file.name}...`);
+            processedFile = await heicToJpeg(file);
+            toast.dismiss();
+            toast.success(`Converted ${file.name} to JPEG`);
+          } catch (conversionError) {
+            console.error('HEIC conversion failed:', conversionError);
+            toast.error(`Failed to convert ${file.name}. Please try a different image.`);
+            throw conversionError;
+          }
+        }
 
+        const imageData = await saveImageToLocalStorage(processedFile, 45000);
         setUploadingImages(prev => prev.map((uploading, i) => i === index ? false : uploading));
         return imageData;
       });
 
       const uploadedImages = await Promise.all(uploadPromises);
-      console.log('Uploaded images:', uploadedImages);
-
-      // No compression - images are stored as-is
 
       const newImages = [...formData.images, ...uploadedImages];
-      console.log('New form images array:', newImages);
-
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         images: newImages
-      });
+      }));
 
-      toast.success(`${uploadedImages.length} images saved successfully!`);
+      toast.success(`${uploadedImages.length} images uploaded successfully!`);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Upload failed: ' + error.message);
@@ -118,39 +169,32 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
       removeImageFromLocalStorage(imageToRemove.id);
     }
 
-    setFormData({
-      ...formData,
-      images: formData.images.filter((_, i) => i !== index)
-    });
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log('Form submission started');
-    console.log('Form data:', formData);
-
     if (formData.images.length === 0) {
-      console.log('No images uploaded');
       toast.error('Please upload at least one image');
       return;
     }
 
     // Validate required fields
     if (!formData.title.trim() || !formData.description.trim() || !formData.location.trim()) {
-      console.log('Missing required fields');
       toast.error('Please fill in all required fields');
       return;
     }
 
     if (!formData.contactPhone.trim() || !formData.contactEmail.trim()) {
-      console.log('Missing contact information');
       toast.error('Please provide contact information');
       return;
     }
 
     if (!formData.monthlyRent || !formData.deposit) {
-      console.log('Missing pricing information');
       toast.error('Please provide pricing information');
       return;
     }
@@ -166,12 +210,11 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
         available_date: formData.availableDate,
         contact_phone: formData.contactPhone,
         contact_email: formData.contactEmail,
-        landlord_name: formData.displayName
+        landlord_name: formData.displayName,
+        amenities: selectedAmenities
       };
 
-      console.log('Calling onSave with data:', houseData);
       await onSave(houseData);
-      console.log('onSave completed successfully');
 
       // Reset form on successful save
       setFormData({
@@ -185,83 +228,106 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
         contactPhone: '',
         contactEmail: '',
         displayName: '',
-        images: []
+        images: [],
+        amenities: []
       });
-
-      console.log('Form reset completed');
+      setSelectedAmenities([]);
 
     } catch (error) {
       console.error('Error saving house:', error);
-      toast.error('Failed to save house. Please try again.');
+      toast.error('Failed to save property. Please try again.');
     }
   };
+
+  // Get filtered amenities by category
+  const filteredAmenities = activeAmenityCategory === 'all' 
+    ? AMENITIES 
+    : AMENITIES.filter(amenity => amenity.category === activeAmenityCategory);
+
+  // Get unique categories
+  const categories = ['all', ...new Set(AMENITIES.map(amenity => amenity.category))];
 
   return (
     <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`}>
       <div className={`modal-content ${isDarkMode ? 'dark' : ''}`}>
         <div className="modal-header">
-          <h2>{house ? 'Edit House' : 'Add New House'}</h2>
-          <button onClick={onClose} className="close-btn">
-            <X size={24} />
+          <div className="header-content">
+            <div className="header-icon">
+              <Sparkles size={24} />
+            </div>
+            <div className="header-text">
+              <h2>{house ? 'Edit Property' : 'Add New Property'}</h2>
+              <p>{house ? 'Update your property details' : 'List your property for rent'}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="close-btn btn">
+            <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-section">
-            <h3>Basic Information</h3>
+          {/* Basic Information Section */}
+          <div className="form-section dynamic-card">
+            <div className="section-header">
+              <Home size={24} className="section-icon" />
+              <h3>Basic Information</h3>
+            </div>
             
-            <div className="form-group">
-              <Home size={20} className="input-icon" />
-              <input
-                type="text"
-                name="title"
-                placeholder="House Title (e.g., pendo home)"
-                value={formData.title}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <House size={20} className="input-icon" />
-              <input
-                type="text"
-                name="size"
-                placeholder="House Size (e.g., 2 bedroom)"
-                value={formData.size}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+            <div className="form-grid">
+              <div className="form-group">
+                <Home size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="title"
+                  placeholder="Property Title (e.g., Modern Apartment in Westlands)"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
 
-            <div className="form-group">
-              <User size={20} className="input-icon" />
-              <input
-                type="text"
-                name="displayName"
-                placeholder="Your Display Name (e.g., John Doe Properties)"
-                value={formData.displayName}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+              <div className="form-group">
+                <House size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="size"
+                  placeholder="Property Size (e.g., 2 Bedroom, 3 Bedroom)"
+                  value={formData.size}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
 
-            <div className="form-group">
-              <MapPin size={20} className="input-icon" />
-              <input
-                type="text"
-                name="location"
-                placeholder="Location (e.g., Westlands, Nairobi)"
-                value={formData.location}
-                onChange={handleInputChange}
-                required
-              />
+              <div className="form-group">
+                <User size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="displayName"
+                  placeholder="Your Display Name"
+                  value={formData.displayName}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <MapPin size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="location"
+                  placeholder="Location (Area, City)"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
             </div>
 
             <div className="form-group">
               <FileText size={20} className="input-icon" />
               <textarea
                 name="description"
-                placeholder="Describe the house, amenities, nearby facilities..."
+                placeholder="Describe your property, special features, neighborhood advantages..."
                 value={formData.description}
                 onChange={handleInputChange}
                 rows="4"
@@ -270,10 +336,78 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
             </div>
           </div>
 
-          <div className="form-section">
-            <h3>Pricing & Availability</h3>
+          {/* Amenities Section */}
+          <div className="form-section dynamic-card">
+            <div className="section-header">
+              <Sparkles size={24} className="section-icon" />
+              <h3>Amenities & Features</h3>
+            </div>
             
-            <div className="form-row">
+            <div className="amenities-categories">
+              {categories.map(category => (
+                <button
+                  key={category}
+                  type="button"
+                  className={`category-btn ${activeAmenityCategory === category ? 'active' : ''}`}
+                  onClick={() => setActiveAmenityCategory(category)}
+                >
+                  {category === 'all' ? 'All' : category.charAt(0).toUpperCase() + category.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="amenities-grid">
+              {filteredAmenities.map(amenity => {
+                const IconComponent = amenity.icon;
+                const isSelected = selectedAmenities.includes(amenity.id);
+                
+                return (
+                  <div
+                    key={amenity.id}
+                    className={`amenity-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => toggleAmenity(amenity.id)}
+                  >
+                    <div className="amenity-icon">
+                      <IconComponent size={20} />
+                    </div>
+                    <span className="amenity-label">{amenity.label}</span>
+                    {isSelected && (
+                      <div className="amenity-check">
+                        <Check size={16} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedAmenities.length > 0 && (
+              <div className="selected-amenities">
+                <h4>Selected Amenities ({selectedAmenities.length})</h4>
+                <div className="selected-tags">
+                  {selectedAmenities.map(amenityId => {
+                    const amenity = AMENITIES.find(a => a.id === amenityId);
+                    const IconComponent = amenity?.icon;
+                    return (
+                      <span key={amenityId} className="amenity-tag">
+                        {IconComponent && <IconComponent size={14} />}
+                        {amenity?.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Pricing & Availability Section */}
+          <div className="form-section dynamic-card">
+            <div className="section-header">
+              <Zap size={24} className="section-icon" />
+              <h3>Pricing & Availability</h3>
+            </div>
+            
+            <div className="form-grid">
               <div className="form-group">
                 <input
                   type="number"
@@ -283,112 +417,167 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
                   onChange={handleInputChange}
                   required
                 />
+                <span className="input-suffix">KES/month</span>
               </div>
-              <div className="form-group">
 
+              <div className="form-group">
                 <input
                   type="number"
                   name="deposit"
-                  placeholder="Deposit (KES)"
+                  placeholder="Security Deposit"
                   value={formData.deposit}
+                  onChange={handleInputChange}
+                  required
+                />
+                <span className="input-suffix">KES</span>
+              </div>
+
+              <div className="form-group full-width">
+                <input
+                  type="date"
+                  name="availableDate"
+                  placeholder="Available From"
+                  value={formData.availableDate}
+                  onChange={handleInputChange}
+                  className="date-input"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Contact Information Section */}
+          <div className="form-section dynamic-card">
+            <div className="section-header">
+              <User size={24} className="section-icon" />
+              <h3>Contact Information</h3>
+            </div>
+            
+            <div className="form-grid">
+              <div className="form-group">
+                <input
+                  type="tel"
+                  name="contactPhone"
+                  placeholder="Phone Number"
+                  value={formData.contactPhone}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <input
+                  type="email"
+                  name="contactEmail"
+                  placeholder="Email Address"
+                  value={formData.contactEmail}
                   onChange={handleInputChange}
                   required
                 />
               </div>
             </div>
-
-            <div className="form-group">
-              <input
-                type="date"
-                name="availableDate"
-                placeholder="Available Date"
-                value={formData.availableDate}
-                onChange={handleInputChange}
-              />
-            </div>
           </div>
 
-          <div className="form-section">
-            <h3>Contact Information</h3>
-            
-            <div className="form-group">
-              <input
-                type="tel"
-                name="contactPhone"
-                placeholder="Phone Number"
-                value={formData.contactPhone}
-                onChange={handleInputChange}
-                required
-              />
+          {/* Images Section */}
+          <div className="form-section dynamic-card">
+            <div className="section-header">
+              <Camera size={24} className="section-icon" />
+              <h3>Property Images</h3>
             </div>
-
-            <div className="form-group">
-              <input
-                type="email"
-                name="contactEmail"
-                placeholder="Email Address"
-                value={formData.contactEmail}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-          </div>
-
-
-          <div className="form-section">
-            <h3>House Images</h3>
             
-            <div className="image-upload">
-              <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
-                <Camera size={40} />
-                <p>Click to upload images
-                  <br />
-              Only JPEG,JPG and PNG images are allowed. Please upload a valid image.</p>
+            <div className="image-upload-section">
+              <div 
+                className="upload-area dynamic-card"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="upload-icon">
+                  <Camera size={48} />
+                  <Sparkles size={24} className="sparkle" />
+                </div>
+                <div className="upload-text">
+                  <h4>Upload Property Images</h4>
+                  <p>Drag & drop or click to browse</p>
+                  <div className="upload-features">
+                    <span>• Supports JPEG, PNG, HEIC</span>
+                    <span>• Max 10 images</span>
+                    <span>• High quality recommended</span>
+                  </div>
+                </div>
               </div>
+
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*"
-                capture="environment"
+                accept="image/*,image/heic,image/heif"
                 onChange={(e) => handleImageUpload(e.target.files)}
                 style={{ display: 'none' }}
               />
 
-            </div>
-
-            {uploading && (
-              <div className="uploading-indicator">
-                <div className="spinner"></div>
-                <p>Uploading images...</p>
-                <p className="upload-progress">
-                  {uploadingImages.filter(uploading => !uploading).length} of {uploadingImages.length} completed
-                </p>
-              </div>
-            )}
-
-            <div className="image-preview">
-              {formData.images.map((image, index) => (
-                <div key={image.id || index} className="image-item">
-                  <img src={image.url || image} alt={`House ${index + 1}`} />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="remove-image"
-                  >
-                    <X size={16} />
-                  </button>
+              {uploading && (
+                <div className="uploading-indicator dynamic-card">
+                  <div className="uploading-content">
+                    <div className="spinner"></div>
+                    <div className="uploading-text">
+                      <p>Uploading images...</p>
+                      <p className="upload-progress">
+                        {uploadingImages.filter(uploading => !uploading).length} of {uploadingImages.length} completed
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {formData.images.length > 0 && (
+                <div className="image-preview-section">
+                  <h4>Uploaded Images ({formData.images.length}/10)</h4>
+                  <div className="image-preview-grid">
+                    {formData.images.map((image, index) => (
+                      <div key={image.id || index} className="image-preview-item">
+                        <img 
+                          src={image.url || image} 
+                          alt={`Property ${index + 1}`}
+                          loading="lazy"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="remove-image-btn dynamic-btn"
+                        >
+                          <X size={16} />
+                        </button>
+                        <div className="image-overlay">
+                          <span>Image {index + 1}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Form Actions */}
           <div className="modal-actions">
-            <button type="button" onClick={onClose} className="cancel-btn">
-              Cancel
+            <button type="button" onClick={onClose} className="cancel-btn dynamic-btn">
+              <X size={18} />
+              <span>Cancel</span>
             </button>
-            <button type="submit" className="save-btn" disabled={uploading}>
-              {uploading ? 'Saving...' : (house ? 'Update House' : 'Add House')}
+            <button 
+              type="submit" 
+              className="save-btn dynamic-btn primary-btn"
+              disabled={uploading || formData.images.length === 0}
+            >
+              {uploading ? (
+                <>
+                  <div className="button-spinner"></div>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  <span>{house ? 'Update Property' : 'Add Property'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>

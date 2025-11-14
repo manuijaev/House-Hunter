@@ -1,0 +1,473 @@
+/* Dynamic Logo Component Styles */
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo-container:hover {
+  transform: translateY(-2px);
+}
+
+.logo-clickable {
+  cursor: pointer;
+}
+
+.logo-clickable:focus {
+  outline: 2px solid rgba(99, 102, 241, 0.8);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.logo-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* Size Variations */
+.logo-small {
+  gap: 0.5rem;
+}
+
+.logo-small .logo-image-container {
+  width: 32px;
+  height: 32px;
+}
+
+.logo-small .logo-image {
+  width: 32px;
+  height: 32px;
+}
+
+.logo-small .logo-text {
+  gap: 0.25rem;
+}
+
+.logo-small .logo-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.logo-small .logo-tagline {
+  font-size: 0.7rem;
+}
+
+.logo-medium {
+  gap: 0.75rem;
+}
+
+.logo-medium .logo-image-container {
+  width: 45px;
+  height: 45px;
+}
+
+.logo-medium .logo-image {
+  width: 45px;
+  height: 45px;
+}
+
+.logo-medium .logo-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.logo-medium .logo-tagline {
+  font-size: 0.8rem;
+}
+
+.logo-large {
+  gap: 1rem;
+}
+
+.logo-large .logo-image-container {
+  width: 60px;
+  height: 60px;
+}
+
+.logo-large .logo-image {
+  width: 60px;
+  height: 60px;
+}
+
+.logo-large .logo-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.logo-large .logo-tagline {
+  font-size: 0.9rem;
+}
+
+.logo-xlarge {
+  gap: 1.25rem;
+}
+
+.logo-xlarge .logo-image-container {
+  width: 80px;
+  height: 80px;
+}
+
+.logo-xlarge .logo-image {
+  width: 80px;
+  height: 80px;
+}
+
+.logo-xlarge .logo-title {
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.logo-xlarge .logo-tagline {
+  font-size: 1rem;
+}
+
+/* Variant Styles */
+.logo-default .logo-image-container,
+.logo-header .logo-image-container {
+  border-radius: 12px;
+}
+
+.logo-default .logo-title,
+.logo-header .logo-title {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logo-footer .logo-image-container,
+.logo-footer .logo-title {
+  filter: brightness(0.9);
+}
+
+.logo-auth .logo-image-container {
+  border-radius: 16px;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+}
+
+.logo-compact {
+  gap: 0.5rem;
+}
+
+.logo-compact .logo-image-container {
+  width: 40px;
+  height: 40px;
+}
+
+.logo-compact .logo-image {
+  width: 40px;
+  height: 40px;
+}
+
+.logo-compact .logo-text {
+  display: none;
+}
+
+/* Image Container and Image */
+.logo-image-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+  border: 2px solid rgba(99, 102, 241, 0.8);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.logo-image {
+  object-fit: cover;
+  border-radius: inherit;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border-radius: inherit;
+}
+
+/* Glow Effect */
+.logo-glow {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #6366f1, #8b5cf6, #6366f1);
+  border-radius: inherit;
+  opacity: 0;
+  z-index: 1;
+  animation: logoGlow 3s ease-in-out infinite;
+}
+
+.logo-animated:hover .logo-glow {
+  opacity: 0.7;
+}
+
+@keyframes logoGlow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+
+/* Animated Particles */
+.logo-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(99, 102, 241, 0.8);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.particle-1 {
+  top: 10%;
+  right: 10%;
+  animation: particleFloat1 4s ease-in-out infinite;
+}
+
+.particle-2 {
+  bottom: 15%;
+  left: 15%;
+  animation: particleFloat2 5s ease-in-out infinite;
+}
+
+.particle-3 {
+  top: 50%;
+  right: 5%;
+  animation: particleFloat3 3s ease-in-out infinite;
+}
+
+@keyframes particleFloat1 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+  50% { transform: translateY(-8px) rotate(180deg); opacity: 1; }
+}
+
+@keyframes particleFloat2 {
+  0%, 100% { transform: translateX(0px) rotate(0deg); opacity: 0.6; }
+  50% { transform: translateX(6px) rotate(90deg); opacity: 0.9; }
+}
+
+@keyframes particleFloat3 {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.5; }
+  50% { transform: scale(1.2) rotate(180deg); opacity: 0.8; }
+}
+
+/* Text Styles */
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.logo-title {
+  margin: 0;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: all 0.3s ease;
+}
+
+.logo-tagline {
+  margin: 0;
+  color: rgba(160, 160, 160, 0.8);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Animation States */
+.logo-animated .logo-image {
+  animation: logoFloat 6s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+}
+
+.logo-loaded {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.logo-animated:not(.logo-loaded) {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+/* Hover Effects */
+.logo-clickable:hover .logo-image {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.logo-clickable:hover .logo-title {
+  transform: translateX(2px);
+}
+
+/* Loading State */
+.logo-container.loading .logo-image {
+  opacity: 0.5;
+  animation: logoPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Dark Theme Enhancements */
+[data-theme="dark"] .logo-container {
+  --logo-bg-primary: rgba(99, 102, 241, 0.1);
+  --logo-bg-secondary: rgba(139, 92, 246, 0.1);
+  --logo-border: rgba(99, 102, 241, 0.8);
+  --logo-glow: rgba(99, 102, 241, 0.4);
+}
+
+[data-theme="dark"] .logo-image-container {
+  background: linear-gradient(135deg, var(--logo-bg-primary), var(--logo-bg-secondary));
+  border-color: var(--logo-border);
+  box-shadow: 0 4px 20px var(--logo-glow);
+}
+
+[data-theme="dark"] .logo-tagline {
+  color: rgba(160, 160, 160, 0.9);
+}
+
+[data-theme="dark"] .logo-fallback {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+/* Light Theme Adjustments */
+[data-theme="light"] .logo-container {
+  --logo-bg-primary: rgba(99, 102, 241, 0.05);
+  --logo-bg-secondary: rgba(139, 92, 246, 0.05);
+  --logo-border: rgba(99, 102, 241, 0.6);
+  --logo-glow: rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="light"] .logo-image-container {
+  background: linear-gradient(135deg, var(--logo-bg-primary), var(--logo-bg-secondary));
+  border-color: var(--logo-border);
+  box-shadow: 0 4px 20px var(--logo-glow);
+}
+
+[data-theme="light"] .logo-tagline {
+  color: rgba(75, 85, 99, 0.8);
+}
+
+[data-theme="light"] .logo-fallback {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .logo-container {
+    gap: 0.5rem;
+  }
+  
+  .logo-image-container {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  .logo-image {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  .logo-title {
+    font-size: 1.1rem !important;
+  }
+  
+  .logo-tagline {
+    font-size: 0.7rem !important;
+  }
+  
+  .logo-compact .logo-text {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-container {
+    gap: 0.25rem;
+  }
+  
+  .logo-image-container {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .logo-image {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .logo-title {
+    font-size: 1rem !important;
+  }
+  
+  .logo-tagline {
+    display: none;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .logo-animated * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .logo-image-container {
+    border-width: 3px;
+    border-color: currentColor;
+  }
+  
+  .logo-title {
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* Print styles */
+@media print {
+  .logo-container {
+    color: black !important;
+  }
+  
+  .logo-image-container {
+    background: none !important;
+    border: 2px solid black !important;
+    box-shadow: none !important;
+  }
+  
+  .logo-title {
+    -webkit-text-fill-color: black !important;
+    background: none !important;
+  }
+  
+  .logo-glow,
+  .logo-particle {
+    display: none !important;
+  }
+}

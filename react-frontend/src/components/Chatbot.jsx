@@ -16,11 +16,11 @@ import { useAuth } from '../contexts/AuthContext';
 import './Chatbot.css';
 
 function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
-  const { 
-    userPreferences: globalPreferences, 
-    updateUserPreferences, 
+  const {
+    userPreferences: globalPreferences,
+    updateUserPreferences,
     updateUserRecommendations,
-    userRecommendations 
+    userRecommendations
   } = useAuth();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -29,6 +29,7 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
   const [recommendations, setRecommendations] = useState([]);
   const [showViewButton, setShowViewButton] = useState(false);
   const [conversationStep, setConversationStep] = useState('location');
+  const [isRecommendationsActive, setIsRecommendationsActive] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -100,6 +101,54 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Dynamic updates for recommendations
+  useEffect(() => {
+    if (userRecommendations.length > 0 && !showViewButton) {
+      setIsRecommendationsActive(true);
+      setShowViewButton(true);
+      
+      // Add a dynamic update message
+      const updateMessage = {
+        id: Date.now(),
+        type: 'bot',
+        content: `🎯 I've updated your recommendations! I now have ${userRecommendations.length} AI-suggested properties based on your preferences.`,
+        timestamp: new Date().toISOString(),
+        isAIResponse: true
+      };
+      
+      setMessages(prev => [...prev, updateMessage]);
+    }
+  }, [userRecommendations, showViewButton]);
+
+  // Monitor house changes for dynamic updates
+  useEffect(() => {
+    if (recommendations.length > 0 && houses.length > 0) {
+      // Check for new matching houses
+      const location = userPreferences.location;
+      const budget = userPreferences.budget;
+      
+      if (location && budget) {
+        const updatedRecs = getRecommendations(location, budget);
+        
+        if (updatedRecs.length !== recommendations.length) {
+          setRecommendations(updatedRecs);
+          setIsRecommendationsActive(true);
+          
+          // Notify user of changes
+          const changeMessage = {
+            id: Date.now(),
+            type: 'bot',
+            content: `📈 Dynamic update: I found ${updatedRecs.length} matching properties for you in ${location} around ${budget.toLocaleString('en-KE')} KES!`,
+            timestamp: new Date().toISOString(),
+            isAIResponse: true
+          };
+          
+          setMessages(prev => [...prev, changeMessage]);
+        }
+      }
+    }
+  }, [houses, userPreferences, recommendations]);
+
   // Delete conversation function
   const handleDeleteConversation = () => {
     if (window.confirm('Are you sure you want to delete this entire conversation? This will also clear AI recommendations.')) {
@@ -122,6 +171,7 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       setUserPreferences({ location: null, budget: null });
       setRecommendations([]);
       setShowViewButton(false);
+      setIsRecommendationsActive(false);
       setConversationStep('location');
       setInputMessage('');
       
@@ -165,16 +215,42 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
     return null;
   };
 
-  // Simple recommendation logic for now
+  // Enhanced recommendation logic with 24-hour new house consideration
   const getRecommendations = (location, budget) => {
+    const isHouseNew = (house) => {
+      if (!house.created_at && !house.createdAt) return false;
+      try {
+        const createdAt = new Date(house.created_at || house.createdAt);
+        const now = new Date();
+        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        return createdAt > twentyFourHoursAgo;
+      } catch (error) {
+        console.error('Error parsing house creation date:', error);
+        return false;
+      }
+    };
+
     return houses
-      .filter(h => h.isVacant !== false)
+      .filter(h => h.approval_status === 'approved' && (h.isVacant === true || h.isVacant === undefined))
       .filter(h => (h.location || '').toLowerCase().includes(location.toLowerCase()))
       .filter(h => {
-        const rent = Number(h.monthlyRent || h.rent || 0);
+        const rent = Number(h.monthlyRent || h.monthly_rent || h.rent || 0);
         return rent > 0 && rent >= budget * 0.8 && rent <= budget * 1.2;
       })
-      .slice(0, 5);
+      .sort((a, b) => {
+        // Prioritize new houses (within 24 hours)
+        const aIsNew = isHouseNew(a);
+        const bIsNew = isHouseNew(b);
+        
+        if (aIsNew && !bIsNew) return -1;
+        if (!aIsNew && bIsNew) return 1;
+        
+        // Then sort by creation date (newest first)
+        const aDate = new Date(a.created_at || a.createdAt || 0);
+        const bDate = new Date(b.created_at || b.createdAt || 0);
+        return bDate - aDate;
+      })
+      .slice(0, 8); // Show more recommendations for better AI experience
   };
 
   // Handle conversation flow
@@ -196,11 +272,12 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       const recs = getRecommendations(userPreferences.location, budget);
       setRecommendations(recs);
       setShowViewButton(recs.length > 0);
+      setIsRecommendationsActive(recs.length > 0);
 
       if (recs.length > 0) {
-        return `Perfect! I found ${recs.length} houses in ${userPreferences.location} around ${budget.toLocaleString()} KES. Click "View AI Recommendations" to see them!`;
+        return `Perfect! I found ${recs.length} houses in ${userPreferences.location} around ${budget.toLocaleString('en-KE')} KES. Click "View AI Recommendations" to see them!`;
       } else {
-        return `No houses found in ${userPreferences.location} around ${budget.toLocaleString()} KES. Try a different location or budget.`;
+        return `No houses found in ${userPreferences.location} around ${budget.toLocaleString('en-KE')} KES. Try a different location or budget.`;
       }
     }
 
@@ -252,7 +329,8 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
           id: Date.now() + 1,
           type: 'bot',
           content: botResponse,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isAIResponse: true
         };
         setMessages(prev => [...prev, botMessage]);
       }
@@ -278,22 +356,40 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
   };
 
   return (
-    <div className={`chatbot-overlay ${isDarkMode ? 'dark' : ''}`}>
-      <div className={`chatbot-container ${isDarkMode ? 'dark' : ''}`}>
+    <div className={`chatbot-overlay dynamic-theme ${isDarkMode ? 'dark' : ''}`}>
+      <div className={`chatbot-container dynamic-card glass-effect ${isRecommendationsActive ? 'has-recommendations' : ''} ${isDarkMode ? 'dark' : ''}`}>
         <div className="chatbot-header">
           <div className="chatbot-title">
-            <Bot size={24} />
-            <span>AI House Finder</span>
+            <div className="chatbot-avatar">
+              <Bot size={24} />
+              <div className={`status-indicator ${isRecommendationsActive ? 'active' : ''}`}></div>
+              {isRecommendationsActive && (
+                <div className="pulse-ring"></div>
+              )}
+            </div>
+            <div className="chatbot-title-text">
+              <span className="chatbot-name">AI House Finder</span>
+              <span className="chatbot-subtitle">
+                {isRecommendationsActive
+                  ? `Found ${recommendations.length} matches`
+                  : conversationStep === 'complete'
+                    ? 'Ready to find your perfect home'
+                    : 'Let\'s find your perfect home'}
+              </span>
+            </div>
           </div>
           <div className="chatbot-header-actions">
-            <button 
-              onClick={handleDeleteConversation} 
-              className="delete-conversation-btn"
+            <div className={`recommendation-pulse ${isRecommendationsActive ? 'pulsing' : ''}`}>
+              <Sparkles size={16} />
+            </div>
+            <button
+              onClick={handleDeleteConversation}
+              className="delete-conversation-btn dynamic-btn icon-btn"
               title="Delete conversation"
             >
               <Trash2 size={16} />
             </button>
-            <button onClick={onClose} className="close-btn">
+            <button onClick={onClose} className="close-btn dynamic-btn icon-btn">
               <X size={20} />
             </button>
           </div>
@@ -305,16 +401,16 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
           ) : (
             <>
               {messages.map(message => (
-                <div key={message.id} className={`message ${message.type}`}>
+                <div key={message.id} className={`message ${message.type} ${message.isAIResponse ? 'ai-response' : ''}`}>
                   <div className="message-avatar">
                     {message.type === 'bot' ? <Bot size={20} /> : <User size={20} />}
                   </div>
                   <div className="message-content">
                     <div className="message-text">{message.content}</div>
                     <div className="message-time">
-                      {new Date(message.timestamp).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                      {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </div>
                   </div>
@@ -338,42 +434,63 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
         </div>
 
         {showViewButton && recommendations.length > 0 && (
-          <div className="chatbot-recommendations">
+          <div className="chatbot-recommendations glass-effect">
             <div className="recommendations-header">
-              <Sparkles size={16} />
-              <span>Found {recommendations.length} Matches!</span>
+              <Sparkles size={16} className="sparkle-animation" />
+              <span className="recommendations-title">Found {recommendations.length} AI Matches!</span>
+              <div className={`recommendation-status ${isRecommendationsActive ? 'active' : 'inactive'}`}>
+                {isRecommendationsActive ? 'Live Results' : 'Processing...'}
+              </div>
             </div>
-            <div className="recommendations-actions">
-              <p><strong>{userPreferences.location}</strong> • Around <strong>{userPreferences.budget?.toLocaleString()} KES</strong>/month</p>
-              <button onClick={handleViewRecommendations} className="view-recommendations-btn">
-                <CheckCircle size={16} />
-                View AI Recommended Houses
-              </button>
+            <div className="recommendations-content">
+              <div className="preferences-summary">
+                <div className="preference-item">
+                  <span className="preference-label">Location:</span>
+                  <span className="preference-value">{userPreferences.location}</span>
+                </div>
+                <div className="preference-item">
+                  <span className="preference-label">Budget:</span>
+                  <span className="preference-value">Up to {userPreferences.budget?.toLocaleString('en-KE')} KES/month</span>
+                </div>
+              </div>
+              <div className="recommendations-actions">
+                <button
+                  onClick={handleViewRecommendations}
+                  className="view-recommendations-btn dynamic-btn accent-btn"
+                >
+                  <CheckCircle size={16} />
+                  <span>View AI Recommended Houses</span>
+                  <Sparkles size={14} className="btn-sparkle" />
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         <div className="chatbot-input">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={
-              conversationStep === 'location' ? "Enter your preferred location..." :
-              conversationStep === 'budget' ? "Enter your monthly budget..." :
-              "Ask about locations or budgets..."
-            }
-            disabled={isTyping}
-          />
-          <button 
-            onClick={handleSendMessage} 
-            disabled={!inputMessage.trim() || isTyping} 
-            className="send-btn"
-          >
-            <Send size={20} />
-          </button>
+          <div className="input-container">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="chatbot-input-field dynamic-input"
+              placeholder={
+                conversationStep === 'location' ? "Enter your preferred location..." :
+                conversationStep === 'budget' ? "Enter your monthly budget..." :
+                "Ask about locations or budgets..."
+              }
+              disabled={isTyping}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || isTyping}
+              className="send-btn dynamic-btn accent-btn"
+            >
+              <Send size={20} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

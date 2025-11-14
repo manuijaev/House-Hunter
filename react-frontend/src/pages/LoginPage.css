@@ -17,7 +17,7 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
+  background: linear-gradient(120deg, #0f0f0f, #667eea, #1a1a1a);
   color: white;
 }
 
@@ -39,6 +39,7 @@
   object-fit: cover;
   border: 3px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background-image: url('react-frontend/public/logo.png');
 }
 
 .hero-content h1 {
@@ -126,14 +127,14 @@
   background: transparent;
   border-radius: 8px;
   font-weight: 500;
-  color: #666;
+  color: black;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .type-btn.active {
-  background: white;
-  color: #667eea;
+  background: linear-gradient(120deg, #0f0f0f, #667eea, #1a1a1a);
+  color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -179,7 +180,7 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
+  /* border-color: #2c2d31; */
   background: white;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
@@ -205,9 +206,9 @@
 
 .auth-btn {
   width: 100%;
-  padding: 0.875rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  padding: 20px 30px;
+  background: whitesmoke;
+  color: black;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
@@ -218,8 +219,8 @@
 }
 
 .auth-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(120deg, #0f0f0f, #667eea, #1a1a1a);
+  color: white;
 }
 
 .auth-btn:disabled {
@@ -238,9 +239,9 @@
 }
 
 .toggle-btn {
-  background: none;
+  background:whitesmoke;
   border: none;
-  color: #667eea;
+  color: black;
   font-weight: 600;
   cursor: pointer;
   margin-left: 0.5rem;
@@ -248,7 +249,8 @@
 }
 
 .toggle-btn:hover {
-  color: #764ba2;
+  color: whitesmoke;
+  background: linear-gradient(120deg, #0f0f0f, #667eea, #1a1a1a);
 }
 
 .error-message {

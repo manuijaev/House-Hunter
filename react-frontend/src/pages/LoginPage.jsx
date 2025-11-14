@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import logo from '../assets/logo.jpeg';
 import './LoginPage.css';
+import Logo from '../components/Logo';
 
 function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -25,6 +25,25 @@ function LoginPage() {
 
   const { login, signup, currentUser, userType: authUserType } = useAuth();
   const navigate = useNavigate();
+
+  // Handle URL parameters for mode, userType, and houseId
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    const userTypeParam = urlParams.get('userType');
+    const houseId = urlParams.get('houseId');
+
+    if (mode === 'signup') {
+      setIsLogin(false);
+    }
+    if (userTypeParam) {
+      setUserType(userTypeParam);
+    }
+    if (houseId) {
+      // Store pending house ID for post-signup redirect
+      localStorage.setItem('pendingHouseId', houseId);
+    }
+  }, []);
 
   
   useEffect(() => {
@@ -130,13 +149,20 @@ const handleSubmit = async (e) => {
       <div className="hero-section">
         <div className="hero-content">
           <div className="hero-icon">
-            <img src={logo} alt="House Hunter Logo" className="logo-image" />
+            <Logo
+              variant="auth"
+              size="large"
+              animated={true}
+              showText={false}
+            />
           </div>
-          <h1>House Hunter</h1>
-          <p className="hero-subtitle">
-            Your gateway to finding the perfect home or managing your rental properties.
-            Connect tenants with landlords seamlessly.
-          </p>
+          <div className="hero-text">
+            <h1>House Hunter</h1>
+            <p className="hero-subtitle">
+              Your gateway to finding the perfect home or managing your rental properties.
+              Connect tenants with landlords seamlessly.
+            </p>
+          </div>
           <div className="hero-features">
             <div className="feature">
               <Search size={24} />

@@ -435,88 +435,135 @@
 .house-card.dark .delete-btn:hover {
   background: #c0392b;
 }
-GLOWING BORDER FOR AI RECOMMENDED HOUSES */
-.house-card.recommended {
-  position: relative;
-  border-radius: 14px;
-  padding: 3px;
-  background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #ffd93d);
-  background-size: 400% 400%;
-  animation: gradientGlow 3s ease infinite;
+/* Enhanced HouseCard CSS - AI Recommended Styles Optimized */
+
+/* Root Variables - AI Recommended Colors */
+:root {
+  --ai-gradient-1: #ff6b9d;
+  --ai-gradient-2: #667eea;
+  --ai-gradient-3: #4ecdc4;
+  --ai-gradient-4: #45b7d1;
+  --ai-gradient-5: #ffd93d;
+  --ai-gradient-6: #ff8a80;
+  --ai-glow-opacity: 0.7;
+  --ai-glow-blur: 15px;
+  --ai-border-width: 3px;
 }
 
+/* AI Recommended Base Styles */
+.house-card.recommended {
+  position: relative;
+  border-radius: var(--card-border-radius);
+  padding: var(--ai-border-width);
+  background: linear-gradient(45deg,
+    var(--ai-gradient-1),
+    var(--ai-gradient-2),
+    var(--ai-gradient-3),
+    var(--ai-gradient-4),
+    var(--ai-gradient-5),
+    var(--ai-gradient-6));
+  background-size: 400% 400%;
+  animation: gradientGlow 4s ease infinite;
+}
+
+/* AI Recommended Glow Effect */
 .house-card.recommended::before {
   content: '';
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
+  top: calc(-1 * var(--ai-border-width));
+  left: calc(-1 * var(--ai-border-width));
+  right: calc(-1 * var(--ai-border-width));
+  bottom: calc(-1 * var(--ai-border-width));
   background: inherit;
-  border-radius: 16px;
+  border-radius: calc(var(--card-border-radius) + var(--ai-border-width));
   z-index: -1;
-  animation: gradientGlow 3s ease infinite;
-  filter: blur(10px);
-  opacity: 0.7;
+  animation: gradientGlow 4s ease infinite;
+  filter: blur(var(--ai-glow-blur));
+  opacity: var(--ai-glow-opacity);
 }
 
-.house-card.recommended > .house-image,
-.house-card.recommended > .house-content {
-  border-radius: 12px;
-  background: white;
+/* Ensure content areas have proper backgrounds for recommended cards */
+.house-card.recommended .house-image-enhanced,
+.house-card.recommended .house-content-enhanced {
+  background: white !important;
+  border-radius: calc(var(--card-border-radius) - var(--ai-border-width)) !important;
 }
 
-.dark .house-card.recommended > .house-image,
-.dark .house-card.recommended > .house-content {
-  background: #1f2937;
+.house-card.recommended .house-image-enhanced {
+  border-radius: calc(var(--card-border-radius) - var(--ai-border-width)) 
+                 calc(var(--card-border-radius) - var(--ai-border-width)) 
+                 0 0 !important;
 }
 
+.house-card.recommended .house-content-enhanced {
+  border-radius: 0 0 
+                calc(var(--card-border-radius) - var(--ai-border-width)) 
+                calc(var(--card-border-radius) - var(--ai-border-width)) !important;
+}
+
+/* AI Recommended Badge */
+.ai-recommended-badge-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(139, 92, 246, 0.9);
+  color: white;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Gradient Animation */
 @keyframes gradientGlow {
-  0% {
-    background-position: 0% 50%;
+  0%, 100% { 
+    background-position: 0% 50%; 
   }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
+  50% { 
+    background-position: 100% 50%; 
   }
 }
 
-@media (max-width: 480px) {
-  .house-footer {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .action-buttons {
-    justify-content: stretch;
-  }
-
-  .chat-btn,
-  .payment-btn {
-    flex: 1;
-    justify-content: center;
-  }
+/* Dark Mode Support for AI Recommended Cards */
+.house-card.dark.recommended .house-image-enhanced,
+.house-card.dark.recommended .house-content-enhanced {
+  background: var(--dark-surface) !important;
 }
 
+/* Responsive AI Recommended Styles */
 @media (max-width: 768px) {
-  .house-image {
-    height: 200px;
+  :root {
+    --ai-border-width: 2px;
+    --ai-glow-blur: 10px;
+    --ai-glow-opacity: 0.6;
   }
-
-  .image-nav-btn {
-    width: 44px !important;
-    height: 44px !important;
+  
+  .house-card.recommended {
+    padding: var(--ai-border-width);
+  }
+  
+  .ai-recommended-badge-enhanced {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.7rem;
   }
 }
 
 @media (max-width: 480px) {
-  .house-image {
-    height: 160px;
+  :root {
+    --ai-border-width: 1px;
+    --ai-glow-blur: 8px;
+    --ai-glow-opacity: 0.5;
   }
-
-  .image-counter {
-    font-size: 0.75rem;
+  
+  .ai-recommended-badge-enhanced {
+    padding: 0.25rem 0.375rem;
+    font-size: 0.65rem;
   }
 }

@@ -144,17 +144,25 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     let timeoutId;
-    
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('Auth state changed:', user);
-      
+
       if (!isMounted) return;
-      
+
       if (user) {
         console.log('User found, setting current user and fetching data');
         setCurrentUser(user);
         try {
           await fetchUserData(user);
+
+          // Check for pending house redirect after successful authentication
+          const pendingHouseId = localStorage.getItem('pendingHouseId');
+          if (pendingHouseId) {
+            localStorage.removeItem('pendingHouseId');
+            // Store it for the tenant page to prioritize
+            localStorage.setItem('pendingHouseRedirect', pendingHouseId);
+          }
         } catch (error) {
           console.error('Error in fetchUserData:', error);
         }
@@ -165,7 +173,7 @@ export const AuthProvider = ({ children }) => {
         setUserPreferences(null);
         setUserRecommendations([]);
       }
-      
+
       if (isMounted) {
         console.log('Setting loading to false');
         setLoading(false);

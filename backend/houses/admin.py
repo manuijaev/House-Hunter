@@ -23,6 +23,6 @@ class HouseAdmin(admin.ModelAdmin):
             'fields': ('contact_phone', 'contact_email', 'landlord_name')
         }),
         ('Media', {
-            'fields': ('images',)
+            'fields': ('images', 'amenities')
         }),
     )

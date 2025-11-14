@@ -3,6 +3,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import TenantPage from './pages/TenantPage';
 import LandlordPage from './pages/LandlordPage';
@@ -18,8 +19,9 @@ function AppRoutes() {
   if (!currentUser) {
     return (
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }

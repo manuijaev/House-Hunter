@@ -100,6 +100,7 @@ export const djangoAPI = {
       contact_email: houseData.contactEmail || '',
       landlord_name: houseData.displayName || '',
       images: imageUrls,
+      amenities: houseData.amenities || [],
     };
 
     console.log('Processed Django data:', djangoHouseData);
@@ -133,6 +134,7 @@ export const djangoAPI = {
           })
         : [];
     }
+    if (updates.amenities !== undefined) djangoUpdates.amenities = updates.amenities || [];
     if (updates.isVacant !== undefined) djangoUpdates.is_vacant = Boolean(updates.isVacant);
 
     return await makeApiCall(`/houses/${houseId}/`, {
@@ -150,6 +152,27 @@ export const djangoAPI = {
       method: 'PATCH',
       body: JSON.stringify({ is_vacant: Boolean(isVacant) }),
     });
+  },
+
+  incrementHouseView: async (houseId) => {
+    // Increment view count for analytics
+    try {
+      return await makeApiCall(`/houses/${houseId}/increment-view/`, { method: 'POST' });
+    } catch (error) {
+      // If endpoint doesn't exist, just log and continue
+      console.log('View tracking endpoint not available:', error.message);
+      return null;
+    }
+  },
+
+  getHouseViews: async (houseId) => {
+    // Get view count for a specific house
+    try {
+      return await makeApiCall(`/houses/${houseId}/views/`);
+    } catch (error) {
+      console.log('House views endpoint not available:', error.message);
+      return null;
+    }
   },
 
 

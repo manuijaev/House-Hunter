@@ -23,6 +23,9 @@ class House(models.Model):
     # Images (store image URLs from React)
     images = models.JSONField(default=list)
     
+    # Amenities (store amenity IDs from React)
+    amenities = models.JSONField(default=list)
+    
     # 🎯 MAKE LANDLORD OPTIONAL TEMPORARILY
     landlord = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     landlord_name = models.CharField(max_length=100, default='Landlord')

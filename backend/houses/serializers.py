@@ -19,7 +19,7 @@ class HouseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'location', 'size',
             'monthlyRent', 'deposit', 'availableDate',
-            'images', 'landlord', 'landlordName', 'displayName', 'landlordId', 'landlordEmail',
+            'images', 'amenities', 'landlord', 'landlordName', 'displayName', 'landlordId', 'landlordEmail',
             'isVacant', 'approval_status', 'pendingReason', 'created_at', 'updated_at',
             'contactPhone', 'contactEmail'
         ]
@@ -40,6 +40,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'deposit': instance.deposit,
             'available_date': instance.available_date,
             'images': instance.images,
+            'amenities': instance.amenities,
             'contact_phone': instance.contact_phone,
             'contact_email': instance.contact_email,
         }
@@ -114,6 +115,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'landlord_email': ['landlord_email', 'landlordEmail'],
             'is_vacant': ['is_vacant', 'isVacant'],
             'images': ['images'],
+            'amenities': ['amenities'],
             'title': ['title'],
             'description': ['description'],
             'location': ['location'],

@@ -1,339 +1,808 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   collection,
   query,
-  where,
-  orderBy,
   onSnapshot,
-  addDoc,
+  where,
   deleteDoc,
-  getDocs,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "../firebase/config";
-import { useAuth } from "../contexts/AuthContext";
+  doc,
+  getDoc,
+  addDoc
+} from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { useAuth } from '../contexts/AuthContext';
+import { djangoAPI } from '../services/djangoAPI';
+import { listenToAllHouseStatus } from '../utils/houseStatusListener';
+import {
+  Search,
+  LogOut,
+  MessageCircle,
+  Home,
+  Moon,
+  Sun,
+  MapPin,
+  ChevronDown,
+  Trash2,
+  RotateCcw,
+  Star,
+  X,
+  Filter,
+  Grid3X3,
+  List,
+  SlidersHorizontal,
+  Building,
+  Apartment,
+  House as HouseIcon,
+  Sparkles,
+  Target,
+  Clock,
+  Eye,
+  Heart,
+  Share2,
+  ZoomIn,
+  Bed,
+  Bath,
+  Square,
+  Wifi,
+  Car,
+  Utensils,
+  Snowflake,
+  Dumbbell,
+  Tv,
+  Waves
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import HouseCard from '../components/HouseCard';
+import Chatbot from '../components/Chatbot';
+import ChatModal from '../components/ChatModal';
+import '../pages/TenantDashboard.css';
+import Logo from '../components/Logo';
 
-function TenantChats() {
-  const { currentUser } = useAuth();
-  const [conversations, setConversations] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
+function TenantPage() {
+  const { logout, currentUser, userPreferences, userRecommendations, updateUserRecommendations } = useAuth();
+  const [houses, setHouses] = useState([]);
+  const [filteredHouses, setFilteredHouses] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [tenantLocation, setTenantLocation] = useState('');
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [selectedHouseForChat, setSelectedHouseForChat] = useState(null);
+  const [houseMessageCounts, setHouseMessageCounts] = useState({});
+  const [aiRecommendedIds, setAiRecommendedIds] = useState([]);
+  const [selectedHouseForQuickView, setSelectedHouseForQuickView] = useState(null);
+  
+  // New state for enhanced filtering and view options
+  const [viewMode, setViewMode] = useState('grid');
+  const [sortBy, setSortBy] = useState('newest');
+  const [priceRange, setPriceRange] = useState([0, 500000]);
+  const [filters, setFilters] = useState({
+    bedrooms: null,
+    bathrooms: null,
+    propertyType: 'all',
+    amenities: []
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  const [favoriteHouses, setFavoriteHouses] = useState(new Set());
 
-  // Fetch tenant's conversations (both sent and received)
+  // Enhanced house fetching with better error handling
   useEffect(() => {
-    if (!currentUser) return;
-
-    // Query for messages where tenant is sender
-    const sentQuery = query(
-      collection(db, "messages"),
-      where("senderId", "==", currentUser.uid),
-      orderBy("timestamp", "desc")
-    );
-
-    // Query for messages where tenant is receiver
-    const receivedQuery = query(
-      collection(db, "messages"),
-      where("receiverId", "==", currentUser.uid),
-      orderBy("timestamp", "desc")
-    );
-
-    let sentMessages = [];
-    let receivedMessages = [];
-
-    const updateConversations = () => {
-      // Combine both sent and received messages
-      const allMsgs = [...sentMessages, ...receivedMessages];
-
-      // Group by landlord email + houseId
-      const grouped = {};
-      allMsgs.forEach((msg) => {
-        // Determine the landlord (the other party) - use email if available
-        const landlordId = msg.senderId === currentUser.uid ? msg.receiverId : msg.senderId;
-        const landlordEmail = msg.senderId === currentUser.uid ? msg.receiverEmail : msg.senderEmail;
-        const landlordName = msg.senderId === currentUser.uid ? msg.receiverName : msg.senderName;
-        const key = `${landlordEmail || landlordId}_${msg.houseId}`;
+    const fetchHouses = async () => {
+      try {
+        const housesData = await djangoAPI.getHouses();
         
-        // Keep the most recent message for each conversation
+        // Ensure we have a valid array and filter safely
+        const housesArray = Array.isArray(housesData) ? housesData : [];
+        
+        const filtered = housesArray.filter(house => {
+          // Add safety checks for each property access
+          if (!house || typeof house !== 'object') return false;
+          
+          const isApproved = house.approval_status === 'approved';
+          const isVacant = house.isVacant === true || house.isVacant === undefined;
+          
+          return isApproved && isVacant;
+        });
+
+        const pendingHouseId = localStorage.getItem('pendingHouseRedirect');
+        if (pendingHouseId) {
+          localStorage.removeItem('pendingHouseRedirect');
+          const pendingHouse = filtered.find(house => house && String(house.id) === pendingHouseId);
+          if (pendingHouse) {
+            const otherHouses = filtered.filter(house => house && String(house.id) !== pendingHouseId);
+            const prioritizedHouses = [pendingHouse, ...otherHouses];
+            setHouses(prioritizedHouses);
+            applyFiltersAndSort(prioritizedHouses);
+            return;
+          }
+        }
+
+        setHouses(filtered);
+        applyFiltersAndSort(filtered);
+      } catch (error) {
+        console.error('TenantPage: Django API error:', error);
+        setHouses([]);
+        applyFiltersAndSort([]);
+      }
+    };
+
+    fetchHouses();
+
+    let unsubscribe = null;
+    try {
+      unsubscribe = listenToAllHouseStatus((statusUpdates) => {
+        setHouses(prevHouses => {
+          if (!Array.isArray(prevHouses) || prevHouses.length === 0) return prevHouses;
+          
+          const updatedHouses = prevHouses.map(house => {
+            if (!house) return house;
+            
+            const statusUpdate = statusUpdates[String(house.id)];
+            if (statusUpdate) {
+              return {
+                ...house,
+                approval_status: statusUpdate.approval_status || house.approval_status,
+                isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
+              };
+            }
+            return house;
+          });
+
+          const filtered = updatedHouses.filter(house => 
+            house && house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
+          );
+
+          applyFiltersAndSort(filtered);
+          return updatedHouses;
+        });
+      });
+    } catch (err) {
+      console.error('Failed to set up house status listener:', err);
+      const interval = setInterval(fetchHouses, 10000);
+      return () => clearInterval(interval);
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Load user preferences and favorites
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      setIsDarkMode(savedTheme === 'dark');
+    }
+
+    // Load favorites
+    if (currentUser?.uid) {
+      const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.uid}`) || '[]');
+      setFavoriteHouses(new Set(savedFavorites));
+    }
+  }, [currentUser]);
+
+  // Enhanced filtering and sorting function
+  const applyFiltersAndSort = (housesToFilter) => {
+    let filtered = housesToFilter.filter(house => house && typeof house === 'object');
+
+    // Search filter
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(house => {
+        const titleMatch = house.title?.toLowerCase().includes(term);
+        const locationMatch = house.location?.toLowerCase().includes(term);
+        const descriptionMatch = house.description?.toLowerCase().includes(term);
+        return titleMatch || locationMatch || descriptionMatch;
+      });
+    }
+
+    // Price range filter
+    filtered = filtered.filter(house => {
+      const rent = house.monthlyRent || 0;
+      return rent >= priceRange[0] && rent <= priceRange[1];
+    });
+
+    // Bedrooms filter
+    if (filters.bedrooms) {
+      filtered = filtered.filter(house => (house.bedrooms || 0) >= filters.bedrooms);
+    }
+
+    // Bathrooms filter
+    if (filters.bathrooms) {
+      filtered = filtered.filter(house => (house.bathrooms || 0) >= filters.bathrooms);
+    }
+
+    // Property type filter
+    if (filters.propertyType !== 'all') {
+      filtered = filtered.filter(house => 
+        house.type?.toLowerCase() === filters.propertyType.toLowerCase()
+      );
+    }
+
+    // Sort houses
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'price-low':
+          return (a.monthlyRent || 0) - (b.monthlyRent || 0);
+        case 'price-high':
+          return (b.monthlyRent || 0) - (a.monthlyRent || 0);
+        case 'recommended':
+          const aRecommended = aiRecommendedIds.includes(a.id);
+          const bRecommended = aiRecommendedIds.includes(b.id);
+          if (aRecommended && !bRecommended) return -1;
+          if (!aRecommended && bRecommended) return 1;
+          return 0;
+        case 'newest':
+        default:
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      }
+    });
+
+    setFilteredHouses(sorted);
+  };
+
+  // Apply filters when dependencies change
+  useEffect(() => {
+    applyFiltersAndSort(houses);
+  }, [searchTerm, sortBy, priceRange, filters, houses, aiRecommendedIds]);
+
+  // Fetch tenant location
+  useEffect(() => {
+    const fetchTenantLocation = async () => {
+      if (currentUser) {
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setTenantLocation(userData.location || 'Nairobi');
+          } else {
+            setTenantLocation('Nairobi');
+          }
+        } catch (error) {
+          const savedLocation = localStorage.getItem(`tenant_location_${currentUser.uid}`);
+          setTenantLocation(savedLocation || 'Nairobi');
+        }
+      }
+    };
+    fetchTenantLocation();
+  }, [currentUser]);
+
+  // Message tracking
+  useEffect(() => {
+    if (!currentUser || houses.length === 0) return;
+
+    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.uid));
+    const q2 = query(collection(db, 'messages'), where('receiverEmail', '==', currentUser.email));
+
+    const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+    const getProcessedIds = () => {
+      try {
+        const stored = localStorage.getItem(processedKey);
+        return stored ? new Set(JSON.parse(stored)) : new Set();
+      } catch { return new Set(); }
+    };
+
+    const saveProcessedIds = (ids) => {
+      try {
+        const idsArray = Array.from(ids).slice(-1000);
+        localStorage.setItem(processedKey, JSON.stringify(idsArray));
+      } catch (error) {
+        console.warn('Failed to save processed message IDs:', error);
+      }
+    };
+
+    let processedMessageIds = getProcessedIds();
+    let previousMessages = [];
+    let allMessages = [];
+
+    const processMessages = () => {
+      const newMessages = allMessages.filter(msg => {
+        const houseId = msg.houseId;
+        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadTimestamp = localStorage.getItem(lastReadKey);
+        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        const existingTime = grouped[key]?.lastTime 
-          ? (grouped[key].lastTime.toDate?.() || new Date(grouped[key].lastTime))
-          : null;
-        
-        if (!grouped[key] || (existingTime && msgTime > existingTime)) {
-          grouped[key] = {
-            houseId: msg.houseId,
-            landlordId: landlordId,
-            landlordEmail: landlordEmail,
-            landlordName: landlordName || "Landlord",
-            lastMessage: msg.text,
-            lastTime: msg.timestamp,
-          };
+        const isNew = msgTime > lastReadTime;
+        const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
+        const notAlreadyShown = !processedMessageIds.has(msg.id);
+        const isFromLandlord = msg.senderId !== currentUser.uid;
+        return isNew && isNotPrevious && notAlreadyShown && isFromLandlord;
+      });
+
+      newMessages.forEach(msg => {
+        const landlordEmail = msg.senderEmail || 'Landlord';
+        toast.success(`New message from ${landlordEmail}: ${msg.text}`, { duration: 5000 });
+        processedMessageIds.add(msg.id);
+      });
+
+      if (newMessages.length > 0) saveProcessedIds(processedMessageIds);
+      previousMessages = [...allMessages];
+
+      const counts = {};
+      allMessages.forEach(msg => {
+        const houseId = msg.houseId;
+        if (!counts[houseId]) counts[houseId] = 0;
+        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadTimestamp = localStorage.getItem(lastReadKey);
+        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
+        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
+        if (msgTime > lastReadTime && msg.senderId !== currentUser.uid) {
+          counts[houseId] += 1;
         }
       });
 
-      setConversations(Object.values(grouped));
+      setHouseMessageCounts(counts);
     };
 
-    const unsubscribeSent = onSnapshot(sentQuery, (snapshot) => {
-      sentMessages = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      updateConversations();
+    const unsubscribe1 = onSnapshot(q1, (snapshot) => {
+      const messages1 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      allMessages = [...messages1];
+      processMessages();
     });
 
-    const unsubscribeReceived = onSnapshot(receivedQuery, (snapshot) => {
-      receivedMessages = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      updateConversations();
+    const unsubscribe2 = onSnapshot(q2, (snapshot) => {
+      const messages2 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const existingIds = new Set(allMessages.map(m => m.id));
+      messages2.forEach(msg => {
+        if (!existingIds.has(msg.id)) allMessages.push(msg);
+      });
+      processMessages();
     });
 
     return () => {
-      unsubscribeSent();
-      unsubscribeReceived();
+      unsubscribe1();
+      unsubscribe2();
     };
-  }, [currentUser]);
+  }, [currentUser, houses]);
 
-  // Fetch messages for selected chat
-  useEffect(() => {
-    if (!selectedChat) return;
-
-    // Mark messages as read when viewing this chat
-    const lastReadKey = `tenant_last_read_${currentUser.uid}_${selectedChat.houseId}`;
-    localStorage.setItem(lastReadKey, new Date().toISOString());
-
-    const q = query(
-      collection(db, "messages"),
-      where("houseId", "==", selectedChat.houseId),
-      orderBy("timestamp", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Only messages between this tenant and landlord (by email or ID)
-      const landlordEmail = selectedChat.landlordEmail;
-      const landlordId = selectedChat.landlordId;
-      const filtered = msgs.filter(
-        (m) =>
-          (m.senderId === currentUser.uid &&
-            (m.receiverEmail === landlordEmail || m.receiverId === landlordId || m.receiverId === landlordEmail)) ||
-          ((m.senderId === landlordId || m.senderEmail === landlordEmail) &&
-            m.receiverId === currentUser.uid)
-      );
-
-      // Update last read time when messages are loaded/viewed
-      if (filtered.length > 0) {
-        const latestMessage = filtered[filtered.length - 1];
-        const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
-        localStorage.setItem(lastReadKey, latestTime.toISOString());
-        
-        // Mark all current messages in this conversation as processed to prevent toasts on refresh
-        const processedKey = `tenant_processed_messages_${currentUser.uid}`;
-        try {
-          const stored = localStorage.getItem(processedKey);
-          const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
-          filtered.forEach(msg => {
-            if (msg.senderId !== currentUser.uid) {
-              processedIds.add(msg.id);
-            }
-          });
-          const idsArray = Array.from(processedIds).slice(-1000);
-          localStorage.setItem(processedKey, JSON.stringify(idsArray));
-        } catch (error) {
-          console.warn('Failed to update processed message IDs:', error);
-        }
-      }
-
-      setMessages(prevMessages => {
-        const optimisticMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
-        const allMessages = [...filtered];
-
-        // Keep optimistic messages that don't have real counterparts yet
-        optimisticMessages.forEach(optMsg => {
-          const exists = filtered.some(realMsg =>
-            realMsg.text === optMsg.text &&
-            realMsg.senderId === optMsg.senderId &&
-            Math.abs((realMsg.timestamp?.toDate?.() || realMsg.timestamp) - (optMsg.timestamp?.toDate?.() || optMsg.timestamp)) < 5000 // Within 5 seconds
-          );
-          if (!exists) {
-            allMessages.push(optMsg);
-          }
-        });
-
-
-        return allMessages.sort((a, b) => {
-          const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;
-          const bTime = b.timestamp?.toDate?.() || b.timestamp || 0;
-          return aTime - bTime;
-        });
-      });
-    });
-
-    return () => unsubscribe();
-  }, [selectedChat, currentUser]);
-
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedChat) return;
-
-    const messageText = newMessage.trim();
-
-    // Optimistically add message to local state
-    const optimisticMessage = {
-      id: `temp-${Date.now()}`,
-      text: messageText,
-      houseId: selectedChat.houseId,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || "Tenant",
-      senderEmail: currentUser.email,
-      receiverId: selectedChat.landlordId || selectedChat.landlordEmail,
-      receiverEmail: selectedChat.landlordEmail,
-      receiverName: selectedChat.landlordName,
-      timestamp: { toDate: () => new Date() }, // Temporary timestamp
-    };
-
-    setMessages(prev => [...prev, optimisticMessage]);
-    setNewMessage("");
-
-    try {
-      await addDoc(collection(db, "messages"), {
-        text: messageText,
-        houseId: selectedChat.houseId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Tenant",
-        senderEmail: currentUser.email,
-        receiverId: selectedChat.landlordId || selectedChat.landlordEmail,
-        receiverEmail: selectedChat.landlordEmail,
-        receiverName: selectedChat.landlordName,
-        timestamp: serverTimestamp(),
-      });
-      toast.success('Message sent successfully');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      setNewMessage(messageText);
-      toast.error('Failed to send message');
+  // Toggle favorite
+  const toggleFavorite = (houseId) => {
+    const newFavorites = new Set(favoriteHouses);
+    if (newFavorites.has(houseId)) {
+      newFavorites.delete(houseId);
+      toast.success('Removed from favorites');
+    } else {
+      newFavorites.add(houseId);
+      toast.success('Added to favorites');
+    }
+    setFavoriteHouses(newFavorites);
+    
+    if (currentUser?.uid) {
+      localStorage.setItem(`favorites_${currentUser.uid}`, JSON.stringify([...newFavorites]));
     }
   };
 
-  const handleClearConversation = () => {
-    if (!selectedChat) return;
-
-    if (window.confirm('Are you sure you want to clear this conversation? Messages will be cleared from your view only.')) {
-      setMessages([]);
-      toast.success('Conversation cleared from your view');
+  // Quick View handler
+  const handleQuickView = (house) => {
+    if (!house) return;
+    
+    setSelectedHouseForQuickView(house);
+    // Scroll to the house card
+    const houseElement = document.getElementById(`house-${house.id}`);
+    if (houseElement) {
+      houseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Add highlight effect
+      houseElement.classList.add('quick-view-highlight');
+      setTimeout(() => {
+        houseElement.classList.remove('quick-view-highlight');
+      }, 3000);
+      toast.success(`Viewing: ${house.title}`);
     }
+  };
+
+  // Theme toggle
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+  };
+
+  // Logout handler
+  const handleLogout = async () => {
+    try { 
+      await logout(); 
+    } catch (error) { 
+      console.error('Logout error:', error);
+      toast.error('Logout failed');
+    }
+  };
+
+  // Delete account handler
+  const handleDeleteAccount = async () => {
+    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        try { 
+          await deleteDoc(userDocRef); 
+        } catch (error) { 
+          console.log('User document not found or already deleted');
+        }
+        await currentUser.delete();
+        toast.success('Account deleted successfully');
+      } catch (error) {
+        console.error('Delete account error:', error);
+        toast.error('Failed to delete account: ' + error.message);
+      }
+    }
+    setShowDropdown(false);
+  };
+
+  // Chat handler
+  const handleChat = (house) => {
+    if (!house) return;
+    
+    setSelectedHouseForChat(house);
+    setShowChatModal(true);
+    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
+    localStorage.setItem(lastReadKey, new Date().toISOString());
+    setHouseMessageCounts(prev => ({ ...prev, [house.id]: 0 }));
+  };
+
+  // Payment handler
+  const handlePayment = (house) => {
+    if (!house) return;
+    
+    if (currentUser?.uid) {
+      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+      if (!paidHouses.includes(String(house.id))) {
+        paidHouses.push(String(house.id));
+        localStorage.setItem(`paid_houses_${currentUser.uid}`, JSON.stringify(paidHouses));
+        toast.success(`Payment successful! You can now chat with the landlord for ${house.title}`);
+      } else {
+        toast.info('You have already paid for this house');
+      }
+    }
+  };
+
+  // AI Recommendations
+  const handleViewRecommendations = async (recommendations, preferences) => {
+    try {
+      const validRecommendations = recommendations.filter(rec => rec && rec.id);
+      await updateUserRecommendations(validRecommendations);
+      setAiRecommendedIds(validRecommendations.map(r => r.id));
+      toast.success(`AI found ${validRecommendations.length} matching properties`);
+    } catch (error) {
+      console.error('Error saving recommendations:', error);
+      toast.error('Failed to save recommendations');
+    }
+  };
+
+  const handleClearChatbotRecommendations = async () => {
+    try {
+      await updateUserRecommendations([]);
+      setAiRecommendedIds([]);
+      toast.success('AI recommendations cleared', { duration: 3000 });
+    } catch (error) {
+      console.error('Error clearing recommendations:', error);
+      toast.error('Failed to clear recommendations');
+    }
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setSearchTerm('');
+    setPriceRange([0, 500000]);
+    setFilters({
+      bedrooms: null,
+      bathrooms: null,
+      propertyType: 'all',
+      amenities: []
+    });
+    setSortBy('newest');
+    toast.success('Filters reset');
   };
 
   return (
-    <div style={{ display: "flex", gap: "1rem" }}>
-      {/* Sidebar conversations */}
-      <div style={{ width: "250px", borderRight: "1px solid #ccc" }}>
-        <h3>Chats</h3>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {conversations.map((c, idx) => (
-            <li
-              key={idx}
-              style={{
-                cursor: "pointer",
-                padding: "6px",
-                borderBottom: "1px solid #eee",
-                background:
-                  selectedChat &&
-                  selectedChat.landlordId === c.landlordId &&
-                  selectedChat.houseId === c.houseId
-                    ? "#f0f0f0"
-                    : "transparent",
-              }}
-              onClick={() => setSelectedChat(c)}
-            >
-              <div>
-                <strong>{c.landlordName}</strong>
-              </div>
-              <div style={{ fontSize: "12px", color: "#555" }}>
-                House {c.houseId}
-              </div>
-              <div style={{ fontSize: "12px", color: "#888" }}>
-                {c.lastMessage}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className={`tenant-dashboard ${isDarkMode ? 'dark' : 'light'}`}>
+      {/* Enhanced Header */}
+      <header className="dashboard-header">
+        <div className="header-content">
+          <div className="header-brand">
+            <Logo
+              variant="header"
+              size="medium"
+              animated={true}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            />
+          </div>
 
-      {/* Chat window */}
-      <div style={{ flex: 1 }}>
-        {selectedChat ? (
-          <div
-            style={{ display: "flex", flexDirection: "column", height: "400px" }}
-          >
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                border: "1px solid #ccc",
-                padding: "10px",
-                marginBottom: "10px",
-              }}
-            >
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  style={{
-                    textAlign:
-                      msg.senderId === currentUser.uid ? "right" : "left",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <strong>{msg.senderName}: </strong>
-                  <span style={{ color: 'blue' }}>{msg.text}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              <form onSubmit={handleSend} style={{ display: "flex", gap: "6px", flex: 1 }}>
+          <div className="header-controls">
+            {/* Primary Search */}
+            <div className="search-container primary-search">
+              <div className="search-input-wrapper">
+                <Search size={20} className="search-icon" />
                 <input
                   type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  style={{ flex: 1, padding: "8px" }}
+                  placeholder="Search properties by title, location, or description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
                 />
-                <button type="submit">Send</button>
-              </form>
-              <button
-                onClick={handleClearConversation}
-                style={{
-                  padding: "8px 12px",
-                  background: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "12px"
-                }}
-                title="Clear this conversation"
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="clear-search-btn"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="header-actions">
+              <button 
+                onClick={() => setShowChatbot(true)} 
+                className="action-btn ai-assistant-btn"
               >
-                Clear Chat
+                <Sparkles size={20} />
+                <span>AI Assistant</span>
               </button>
+
+              {userRecommendations.length > 0 && (
+                <button
+                  onClick={handleClearChatbotRecommendations}
+                  className="action-btn clear-ai-btn"
+                >
+                  <Target size={18} />
+                  <span>Clear AI</span>
+                </button>
+              )}
+
+              <button onClick={toggleTheme} className="action-btn theme-btn">
+                {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+
+              <div className="dropdown-container">
+                <button
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="action-btn dropdown-btn"
+                >
+                  <ChevronDown size={20} />
+                  <span>Menu</span>
+                </button>
+                {showDropdown && (
+                  <div className="dropdown-menu">
+                    <button onClick={handleLogout} className="dropdown-item">
+                      <LogOut size={16} />
+                      <span>Logout</span>
+                    </button>
+                    <button onClick={handleDeleteAccount} className="dropdown-item delete">
+                      <Trash2 size={16} />
+                      <span>Delete Account</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        ) : (
-          <p>Select a conversation to start chatting</p>
-        )}
-      </div>
+        </div>
+      </header>
+
+      {/* Main Dashboard Content */}
+      <main className="dashboard-main">
+        {/* Control Panel */}
+        <div className="control-panel">
+          <div className="control-section">
+            <div className="view-controls">
+              <button 
+                onClick={() => setViewMode('grid')} 
+                className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              >
+                <Grid3X3 size={18} />
+                <span>Grid</span>
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+              >
+                <List size={18} />
+                <span>List</span>
+              </button>
+            </div>
+
+            <div className="sort-controls">
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                className="sort-select"
+              >
+                <option value="newest">Newest First</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="recommended">AI Recommended</option>
+              </select>
+            </div>
+
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className="filter-toggle-btn"
+            >
+              <SlidersHorizontal size={18} />
+              <span>Filters</span>
+            </button>
+
+            <button onClick={resetFilters} className="reset-filters-btn">
+              <RotateCcw size={16} />
+              <span>Reset</span>
+            </button>
+          </div>
+
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="advanced-filters">
+              <div className="filter-group">
+                <label>Price Range (KES)</label>
+                <div className="price-range">
+                  <span>{priceRange[0].toLocaleString()}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="500000"
+                    step="10000"
+                    value={priceRange[1]}
+                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                    className="range-slider"
+                  />
+                  <span>{priceRange[1].toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <label>Bedrooms</label>
+                <select 
+                  value={filters.bedrooms || ''} 
+                  onChange={(e) => setFilters(prev => ({ ...prev, bedrooms: e.target.value ? parseInt(e.target.value) : null }))}
+                >
+                  <option value="">Any</option>
+                  <option value="1">1+</option>
+                  <option value="2">2+</option>
+                  <option value="3">3+</option>
+                  <option value="4">4+</option>
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label>Bathrooms</label>
+                <select 
+                  value={filters.bathrooms || ''} 
+                  onChange={(e) => setFilters(prev => ({ ...prev, bathrooms: e.target.value ? parseInt(e.target.value) : null }))}
+                >
+                  <option value="">Any</option>
+                  <option value="1">1+</option>
+                  <option value="2">2+</option>
+                  <option value="3">3+</option>
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label>Property Type</label>
+                <select 
+                  value={filters.propertyType} 
+                  onChange={(e) => setFilters(prev => ({ ...prev, propertyType: e.target.value }))}
+                >
+                  <option value="all">All Types</option>
+                  <option value="apartment">Apartment</option>
+                  <option value="house">House</option>
+                  <option value="studio">Studio</option>
+                  <option value="condo">Condo</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Properties Section */}
+        <div className="properties-section">
+          <div className="section-header">
+            <div className="header-info">
+              <h2>Available Properties</h2>
+              <div className="results-info">
+                <span className="results-count">{filteredHouses.length} properties found</span>
+                {tenantLocation && (
+                  <span className="location-info">
+                    <MapPin size={14} />
+                    {tenantLocation}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {userRecommendations.length > 0 && userPreferences && (
+              <div className="ai-recommendations-banner">
+                <Sparkles size={16} />
+                <span>
+                  AI Recommendations for {userPreferences.location} • 
+                  Up to {userPreferences.budget?.toLocaleString()} KES • 
+                  {userRecommendations.length} matches found
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Properties Grid/List */}
+          <div className={`properties-container ${viewMode}-view`}>
+            {filteredHouses.map(house => {
+              // Add validation to ensure house is defined and has required properties
+              if (!house || !house.id) {
+                console.warn('Skipping invalid house:', house);
+                return null;
+              }
+              
+              return (
+                <div
+                  key={house.id}
+                  id={`house-${house.id}`}
+                  className={`property-item ${viewMode}-item`}
+                >
+                  <HouseCard
+                    house={house}
+                    userType="tenant"
+                    onChat={() => handleChat(house)}
+                    onPayment={() => handlePayment(house)}
+                    onFavorite={() => toggleFavorite(house.id)}
+                    onQuickView={() => handleQuickView(house)}
+                    isDarkMode={isDarkMode}
+                    messageCount={houseMessageCounts[house.id] || 0}
+                    isRecommended={aiRecommendedIds.includes(house.id)}
+                    isFavorite={favoriteHouses.has(house.id)}
+                    showActions={true}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Empty State */}
+          {filteredHouses.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-icon">
+                <Home size={80} />
+              </div>
+              <h3>No properties found</h3>
+              <p>
+                {searchTerm || showFilters
+                  ? 'Try adjusting your search criteria or filters to see more results.'
+                  : 'No available properties matching your criteria at the moment.'
+                }
+              </p>
+              {(searchTerm || showFilters) && (
+                <button onClick={resetFilters} className="reset-search-btn">
+                  <RotateCcw size={16} />
+                  Reset Search & Filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* AI Chatbot */}
+      {showChatbot && (
+        <Chatbot
+          houses={houses}
+          onClose={() => setShowChatbot(false)}
+          isDarkMode={isDarkMode}
+          onViewRecommendations={handleViewRecommendations}
+        />
+      )}
+
+      {/* Chat Modal */}
+      {showChatModal && selectedHouseForChat && (
+        <ChatModal
+          house={selectedHouseForChat}
+          onClose={() => {
+            setShowChatModal(false);
+            setSelectedHouseForChat(null);
+          }}
+          isDarkMode={isDarkMode}
+        />
+      )}
     </div>
   );
 }
 
-export default TenantChats;
+export default TenantPage;
 
