@@ -47,6 +47,7 @@ import '../components/HouseCard.css';
 import { toast } from 'react-hot-toast';
 import { djangoAPI } from '../services/djangoAPI';
 import { useAuth } from '../contexts/AuthContext';
+import PropertyDetailsModal from './PropertyDetailsModal';
 
 // Enhanced amenities configuration with more variety
 const AMENITIES = [
@@ -98,6 +99,7 @@ function HouseCard({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
   const [isPaid, setIsPaid] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -405,11 +407,11 @@ function HouseCard({
   return (
     <>
       <div
-        className={`house-card enhanced ${!isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''} ${isHovered ? 'hovered' : ''} ${isFavorite ? 'favorited' : ''} ${isExpanded ? 'expanded' : ''} ${isViewed ? 'viewed' : ''}`}
+        className={`house-card enhanced ${userType === 'tenant' ? 'compact-tenant-card' : ''} ${!isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''} ${isHovered ? 'hovered' : ''} ${isFavorite ? 'favorited' : ''} ${isExpanded ? 'expanded' : ''} ${isViewed ? 'viewed' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onClick={handleCardClick}
-        style={{ animationDelay: `${animationDelay}s` }}
+        onClick={userType === 'tenant' ? () => setShowDetailsModal(true) : handleCardClick}
+        style={{ animationDelay: `${animationDelay}s`, cursor: userType === 'tenant' ? 'pointer' : 'default' }}
       >
         {/* Enhanced Image Gallery Section */}
         <div className="house-image-enhanced">
@@ -508,88 +510,107 @@ function HouseCard({
         </div>
 
         {/* Enhanced Content Section */}
-        <div className="house-content-enhanced">
-          {/* Enhanced Header */}
-          <div className="house-header-enhanced">
-            <div className="title-section-enhanced">
-              <h3 className="house-title-enhanced">{houseData.title}</h3>
-              <div className="property-type-enhanced">
-                <Home size={14} />
-                <span>{houseData.size || 'Property'}</span>
+        <div className={`house-content-enhanced ${userType === 'tenant' ? 'compact-tenant' : ''}`}>
+          {userType === 'tenant' ? (
+            /* Compact Card for Tenants - Only Price, Location, Favorite */
+            <>
+              <div className="compact-price-display">
+                {formatPrice(houseData.monthlyRent)}
+                <span className="compact-period-text">/mo</span>
               </div>
-            </div>
-            <div className="price-section-enhanced">
-              <div className="price-enhanced">
-                <span className="monthly-rent-enhanced">{formatPrice(houseData.monthlyRent)}</span>
-                <span className="period-enhanced">/month</span>
+
+              <div className="compact-location-display">
+                <MapPin size={14} />
+                <span>{houseData.location}</span>
               </div>
-              {houseData.deposit > 0 && (
-                <div className="deposit-badge-enhanced">
-                  Deposit: {formatPrice(houseData.deposit)}
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* Enhanced Location */}
-          <div className="location-enhanced">
-            <MapPin size={16} />
-            <span>{houseData.location}</span>
-          </div>
-
-          {/* Enhanced Details Grid */}
-          <div className="details-grid-enhanced">
-            <div className="detail-item-enhanced">
-              <Home size={14} />
-              <span>House size: {houseData.size || '2 bedroom'}</span>
-            </div>
-            <div className="detail-item-enhanced">
-              <Calendar size={14} />
-              <span>Available from: {formatDate(houseData.availableDate)}</span>
-            </div>
-          </div>
-
-          {/* Enhanced Contact Information */}
-          {userType === 'tenant' && !isPaid ? (
-            <div className="locked-info-enhanced">
-              <Lock size={16} />
-              <span>Pay to unlock landlord contact information</span>
-            </div>
+              {/* Favorite button */}
+              <button
+                className={`compact-favorite-button ${isFavorite ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleFavoriteClick(e);
+                }}
+                aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
+              </button>
+            </>
           ) : (
-            <div className="contact-info-enhanced">
-              <div className="contact-item-enhanced">
-                <User size={14} />
-                <span>landlord name: {houseData.landlordName}</span>
+            /* Full Layout for Landlords */
+            <>
+              {/* Enhanced Header */}
+              <div className="house-header-enhanced">
+                <div className="title-section-enhanced">
+                  <h3 className="house-title-enhanced">{houseData.title}</h3>
+                  <div className="property-type-enhanced">
+                    <Home size={14} />
+                    <span>{houseData.size || 'Property'}</span>
+                  </div>
+                </div>
+                <div className="price-section-enhanced">
+                  <div className="price-enhanced">
+                    <span className="monthly-rent-enhanced">{formatPrice(houseData.monthlyRent)}</span>
+                    <span className="period-enhanced">/month</span>
+                  </div>
+                  {houseData.deposit > 0 && (
+                    <div className="deposit-badge-enhanced">
+                      Deposit: {formatPrice(houseData.deposit)}
+                    </div>
+                  )}
+                </div>
               </div>
-              {houseData.contactPhone && (
-                <div className="contact-item-enhanced">
-                  <Phone size={14} />
-                  <span>landlord's phone number: {houseData.contactPhone}</span>
+
+              {/* Enhanced Location */}
+              <div className="location-enhanced">
+                <MapPin size={16} />
+                <span>{houseData.location}</span>
+              </div>
+
+              {/* Enhanced Details Grid */}
+              <div className="details-grid-enhanced">
+                <div className="detail-item-enhanced">
+                  <Home size={14} />
+                  <span>House size: {houseData.size || '2 bedroom'}</span>
                 </div>
-              )}
-              {houseData.contactEmail && (
-                <div className="contact-item-enhanced">
-                  <Mail size={14} />
-                  <span>landlord's email: {houseData.contactEmail}</span>
+                <div className="detail-item-enhanced">
+                  <Calendar size={14} />
+                  <span>Available from: {formatDate(houseData.availableDate)}</span>
                 </div>
-              )}
-            </div>
+              </div>
+
+              {/* Enhanced Contact Information */}
+              <div className="contact-info-enhanced">
+                <div className="contact-item-enhanced">
+                  <User size={14} />
+                  <span>landlord name: {houseData.landlordName}</span>
+                </div>
+                {houseData.contactPhone && (
+                  <div className="contact-item-enhanced">
+                    <Phone size={14} />
+                    <span>landlord's phone number: {houseData.contactPhone}</span>
+                  </div>
+                )}
+                {houseData.contactEmail && (
+                  <div className="contact-item-enhanced">
+                    <Mail size={14} />
+                    <span>landlord's email: {houseData.contactEmail}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Enhanced Description */}
+              <div className="description-enhanced">
+                <p>{houseData.description.length > 100
+                  ? `${houseData.description.substring(0, 100)}...`
+                  : houseData.description || 'No description available'}
+                </p>
+              </div>
+            </>
           )}
 
-          {/* Enhanced Description - Different for tenant vs landlord */}
-          <div className="description-enhanced">
-            <p>{userType === 'tenant' 
-              ? (houseData.description.length > 120 && !isExpanded
-                ? `${houseData.description.substring(0, 120)}...` 
-                : houseData.description || 'No description available')
-              : (houseData.description.length > 100 
-                ? `${houseData.description.substring(0, 100)}...` 
-                : houseData.description || 'No description available')}
-            </p>
-          </div>
-
-          {/* Expanded Content - Different content based on user type */}
-          {isExpanded && (
+          {/* Expanded Content for Landlords only */}
+          {isExpanded && userType === 'landlord' && (
             <div className="expanded-content-enhanced">
               {/* Tenant-specific expanded content */}
               {userType === 'tenant' && (
@@ -838,6 +859,19 @@ function HouseCard({
             )}
           </div>
         </div>
+      )}
+
+      {/* Property Details Modal for Tenants */}
+      {showDetailsModal && userType === 'tenant' && (
+        <PropertyDetailsModal
+          house={house}
+          isPaid={isPaid}
+          onClose={() => setShowDetailsModal(false)}
+          onPayment={onPayment}
+          isDarkMode={isDarkMode}
+          isFavorite={isFavorite}
+          onFavorite={onFavorite}
+        />
       )}
     </>
   );
