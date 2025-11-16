@@ -1,4 +1,7 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext';
 import {
   X,
   MapPin,
@@ -19,15 +22,17 @@ import {
 } from 'lucide-react';
 import './PropertyDetailsModal.css';
 
-function PropertyDetailsModal({ 
-  house, 
-  isPaid, 
-  onClose, 
+function PropertyDetailsModal({
+  house,
+  isPaid,
+  onClose,
   onPayment,
   isDarkMode,
   isFavorite,
   onFavorite
 }) {
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
 
   const formatPrice = (price) => {
@@ -62,6 +67,18 @@ function PropertyDetailsModal({
   const prevImage = () => {
     if (house.images && house.images.length > 1) {
       setCurrentImageIndex((prev) => (prev - 1 + house.images.length) % house.images.length);
+    }
+  };
+
+  const handleFavoriteClick = () => {
+    if (!currentUser) {
+      // Redirect to login with favorite house ID
+      navigate(`/login?favoriteHouseId=${house.id}`);
+      toast.info('Please sign in to save favorites');
+      return;
+    }
+    if (onFavorite) {
+      onFavorite(house.id, !isFavorite);
     }
   };
 
@@ -104,9 +121,9 @@ function PropertyDetailsModal({
           )}
 
           {/* Favorite Button */}
-          <button 
+          <button
             className={`modal-favorite-btn ${isFavorite ? 'active' : ''}`}
-            onClick={() => onFavorite(house.id, !isFavorite)}
+            onClick={handleFavoriteClick}
           >
             <Heart size={24} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>

@@ -231,6 +231,10 @@
 .auth-footer {
   text-align: center;
   margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
 .auth-footer p {
@@ -251,6 +255,28 @@
 .toggle-btn:hover {
   color: whitesmoke;
   background: linear-gradient(120deg, #0f0f0f, #667eea, #1a1a1a);
+}
+
+.home-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f8f9fa;
+  color: #333;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.home-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #495057;
 }
 
 .error-message {

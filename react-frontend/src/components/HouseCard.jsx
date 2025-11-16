@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
   MessageCircle,
@@ -96,6 +97,7 @@ function HouseCard({
   }
 
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
   const [isPaid, setIsPaid] = useState(false);
@@ -247,10 +249,16 @@ function HouseCard({
   // Enhanced action handlers
   const handleFavoriteClick = useCallback((e) => {
     e.stopPropagation();
+    if (!currentUser) {
+      // Redirect to login with favorite house ID
+      navigate(`/login?favoriteHouseId=${houseData?.id}`);
+      toast.info('Please sign in to save favorites');
+      return;
+    }
     if (onFavorite && houseData?.id) {
       onFavorite(houseData.id, !isFavorite);
     }
-  }, [onFavorite, houseData?.id, isFavorite]);
+  }, [onFavorite, houseData?.id, isFavorite, currentUser, navigate]);
 
   
 

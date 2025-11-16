@@ -234,10 +234,6 @@ function TenantPage() {
           return (a.monthlyRent || a.monthly_rent || 0) - (b.monthlyRent || b.monthly_rent || 0);
         case 'price-high':
           return (b.monthlyRent || b.monthly_rent || 0) - (a.monthlyRent || a.monthly_rent || 0);
-        case 'popularity':
-          return (b.popularity || 0) - (a.popularity || 0);
-        case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
         default:
           return 0;
       }
@@ -271,7 +267,39 @@ function TenantPage() {
     if (currentUser?.uid) {
       try {
         const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.uid}`) || '[]');
-        setFavoriteHouses(new Set(savedFavorites));
+        const favoritesSet = new Set(savedFavorites);
+        setFavoriteHouses(favoritesSet);
+
+        // Check for pending favorite redirect
+        const pendingFavoriteHouseId = localStorage.getItem('pendingFavoriteRedirect');
+        if (pendingFavoriteHouseId) {
+          localStorage.removeItem('pendingFavoriteRedirect');
+
+          // Add the house to favorites if not already
+          if (!favoritesSet.has(String(pendingFavoriteHouseId))) {
+            const newFavorites = new Set(favoritesSet);
+            newFavorites.add(String(pendingFavoriteHouseId));
+            setFavoriteHouses(newFavorites);
+            localStorage.setItem(`favorites_${currentUser.uid}`, JSON.stringify(Array.from(newFavorites)));
+            toast.success('Property added to favorites!', { duration: 2000 });
+          }
+
+          // Enable favorites view
+          setShowFavorites(true);
+
+          // Scroll to the house after a short delay to allow rendering
+          setTimeout(() => {
+            const houseElement = document.getElementById(`house-${pendingFavoriteHouseId}`);
+            if (houseElement) {
+              houseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // Add a temporary highlight effect
+              houseElement.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.5)';
+              setTimeout(() => {
+                houseElement.style.boxShadow = '';
+              }, 3000);
+            }
+          }, 1000);
+        }
       } catch (error) {
         console.error('Error loading favorites:', error);
         setFavoriteHouses(new Set());
@@ -664,8 +692,8 @@ function TenantPage() {
 
             <div className="filter-group">
               <h4>Sort By</h4>
-              <select 
-                value={sortBy} 
+              <select
+                value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="filter-select dynamic-input"
               >
@@ -673,8 +701,6 @@ function TenantPage() {
                 <option value="oldest">Oldest First</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
-                <option value="popularity">Most Popular</option>
-                <option value="rating">Highest Rated</option>
               </select>
             </div>
 

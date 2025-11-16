@@ -197,11 +197,11 @@
 
 .message.sent .message-content {
   background: #3b82f6;
-  color: white;
+  color: grey;
 }
 
 .message.sent .message-text {
-  color: white;
+  color: black;
 }
 
 .chat-modal-container.dark .message-content {

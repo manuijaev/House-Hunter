@@ -265,7 +265,7 @@
 
 .filter-btn:hover {
   background: rgba(99, 102, 241, 0.1);
-  color: var(--text-primary);
+  color: wheat;
 }
 
 .filter-btn:disabled {
@@ -286,7 +286,7 @@
 
 .filter-btn:hover {
   background: rgba(99, 102, 241, 0.1);
-  color: var(--text-primary);
+  color: wheat;
 }
 
 .filter-select {
@@ -634,6 +634,7 @@
   font-weight: 500;
   font-size: 0.9rem;
 }
+
 
 .return-to-dashboard-btn {
   display: flex;

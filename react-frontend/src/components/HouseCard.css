@@ -59,14 +59,7 @@
   transform: none !important;
 }
 
-/* Expanded Card Styles - Slightly Smaller */
-.house-card.expanded {
-  position: relative;
-  z-index: 10;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  transform: scale(1.02);
-  margin: 1rem 0;
-}
+
 
 /* Only show backdrop for non-viewed cards */
 .house-card.expanded:not(.viewed)::before {
@@ -1316,7 +1309,7 @@
   position: absolute;
   top: -3rem;
   right: -1rem;
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   color: white;
   border: none;
   border-radius: 50%;
@@ -1337,7 +1330,7 @@
   background: rgba(255, 193, 7, 0.9);
   color: #333;
   border: none;
-  border-radius: 25px;
+  border-radius: 15px;
   padding: 0.75rem 1.25rem;
   display: flex;
   align-items: center;
@@ -1357,7 +1350,7 @@
 }
 
 .modal-close-btn-enhanced:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(19, 18, 18, 0.3);
   transform: scale(1.1);
 }
 
@@ -1655,11 +1648,11 @@
   top: 1rem;
   right: 1rem;
   background: rgba(255, 255, 255, 0.95);
-  color: #ff6b9d;
+  color: #e60825;
   border: none;
   border-radius: 50%;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1676,7 +1669,7 @@
 }
 
 .compact-favorite-button.active {
-  background: #ff6b9d;
+  background: #f00d18;
   color: white;
 }
 

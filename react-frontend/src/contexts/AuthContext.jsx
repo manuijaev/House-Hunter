@@ -163,6 +163,14 @@ export const AuthProvider = ({ children }) => {
             // Store it for the tenant page to prioritize
             localStorage.setItem('pendingHouseRedirect', pendingHouseId);
           }
+
+          // Check for pending favorite house redirect
+          const pendingFavoriteHouseId = localStorage.getItem('pendingFavoriteHouseId');
+          if (pendingFavoriteHouseId) {
+            localStorage.removeItem('pendingFavoriteHouseId');
+            // Store it for the tenant page to show favorites and highlight this house
+            localStorage.setItem('pendingFavoriteRedirect', pendingFavoriteHouseId);
+          }
         } catch (error) {
           console.error('Error in fetchUserData:', error);
         }

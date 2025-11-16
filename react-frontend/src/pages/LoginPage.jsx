@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff } from 'lucide-react';
+import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff, Home as HomeIcon } from 'lucide-react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import './LoginPage.css';
@@ -26,12 +26,13 @@ function LoginPage() {
   const { login, signup, currentUser, userType: authUserType } = useAuth();
   const navigate = useNavigate();
 
-  // Handle URL parameters for mode, userType, and houseId
+  // Handle URL parameters for mode, userType, houseId, and favoriteHouseId
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const mode = urlParams.get('mode');
     const userTypeParam = urlParams.get('userType');
     const houseId = urlParams.get('houseId');
+    const favoriteHouseId = urlParams.get('favoriteHouseId');
 
     if (mode === 'signup') {
       setIsLogin(false);
@@ -42,6 +43,10 @@ function LoginPage() {
     if (houseId) {
       // Store pending house ID for post-signup redirect
       localStorage.setItem('pendingHouseId', houseId);
+    }
+    if (favoriteHouseId) {
+      // Store pending favorite house ID for post-login redirect to favorites
+      localStorage.setItem('pendingFavoriteHouseId', favoriteHouseId);
     }
   }, []);
 
@@ -272,6 +277,14 @@ const handleSubmit = async (e) => {
           {error && <p className="error-message">{error}</p>}
 
           <div className="auth-footer">
+            <button
+              type="button"
+              className="home-btn"
+              onClick={() => navigate('/')}
+            >
+              <HomeIcon size={16} />
+              <span>Home</span>
+            </button>
             <p>
               {isLogin ? "Don't have an account?" : "Already have an account?"}
               <button

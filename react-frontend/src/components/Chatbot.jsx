@@ -36,14 +36,16 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
   // Initialize chatbot with welcome messages
   useEffect(() => {
     console.log('Chatbot mounting...');
-    
+
     const savedConversation = localStorage.getItem('ai_chatbot_conversation');
     const savedPreferences = localStorage.getItem('ai_chatbot_preferences');
     const savedStep = localStorage.getItem('ai_chatbot_step');
+    const savedRecommendations = localStorage.getItem('ai_chatbot_recommendations');
 
     console.log('Saved conversation:', savedConversation);
     console.log('Saved preferences:', savedPreferences);
     console.log('Saved step:', savedStep);
+    console.log('Saved recommendations:', savedRecommendations);
 
     if (savedConversation && JSON.parse(savedConversation).length > 0) {
       // Use saved conversation
@@ -79,6 +81,15 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
     } else {
       setConversationStep('location');
     }
+
+    if (savedRecommendations) {
+      const recs = JSON.parse(savedRecommendations);
+      setRecommendations(recs);
+      setShowViewButton(recs.length > 0);
+      setIsRecommendationsActive(recs.length > 0);
+      // Update context to sync
+      updateUserRecommendations(recs).catch(() => {});
+    }
   }, []);
 
   // Save conversation to localStorage whenever it changes
@@ -96,6 +107,10 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
     localStorage.setItem('ai_chatbot_step', conversationStep);
   }, [conversationStep]);
 
+  useEffect(() => {
+    localStorage.setItem('ai_chatbot_recommendations', JSON.stringify(recommendations));
+  }, [recommendations]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -111,7 +126,7 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       const updateMessage = {
         id: Date.now(),
         type: 'bot',
-        content: `🎯 I've updated your recommendations! I now have ${userRecommendations.length} AI-suggested properties based on your preferences.`,
+        content: ` I've updated your recommendations! I now have ${userRecommendations.length} AI-suggested properties based on your preferences.`,
         timestamp: new Date().toISOString(),
         isAIResponse: true
       };
@@ -133,7 +148,10 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
         if (updatedRecs.length !== recommendations.length) {
           setRecommendations(updatedRecs);
           setIsRecommendationsActive(true);
-          
+
+          // Update context
+          updateUserRecommendations(updatedRecs).catch(() => {});
+
           // Notify user of changes
           const changeMessage = {
             id: Date.now(),
@@ -142,7 +160,7 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
             timestamp: new Date().toISOString(),
             isAIResponse: true
           };
-          
+
           setMessages(prev => [...prev, changeMessage]);
         }
       }
@@ -178,7 +196,8 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       localStorage.setItem('ai_chatbot_conversation', JSON.stringify(welcomeMessages));
       localStorage.setItem('ai_chatbot_preferences', JSON.stringify({ location: null, budget: null }));
       localStorage.setItem('ai_chatbot_step', 'location');
-      
+      localStorage.removeItem('ai_chatbot_recommendations');
+
       updateUserRecommendations([]).catch(() => {});
       
       toast.success('Conversation and AI recommendations cleared');
@@ -273,6 +292,9 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       setRecommendations(recs);
       setShowViewButton(recs.length > 0);
       setIsRecommendationsActive(recs.length > 0);
+
+      // Update context
+      updateUserRecommendations(recs).catch(() => {});
 
       if (recs.length > 0) {
         return `Perfect! I found ${recs.length} houses in ${userPreferences.location} around ${budget.toLocaleString('en-KE')} KES. Click "View AI Recommendations" to see them!`;
@@ -389,7 +411,8 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
             >
               <Trash2 size={16} />
             </button>
-            <button onClick={onClose} className="close-btn dynamic-btn icon-btn">
+            <button onClick={onClose} className="close-btn dynamic-btn icon-btn"
+              title="Close chatbot">
               <X size={20} />
             </button>
           </div>
