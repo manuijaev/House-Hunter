@@ -1,19 +1,9 @@
 """
 Django settings for backend project.
 """
-import json
 from pathlib import Path
 import os
 from datetime import timedelta
-
-# Try to import Firebase (optional)
-try:
-    import firebase_admin
-    from firebase_admin import credentials
-    FIREBASE_AVAILABLE = True
-except ImportError:
-    firebase_admin = None
-    FIREBASE_AVAILABLE = False
 
 # Load environment variables from a .env file if available
 try:
@@ -25,43 +15,6 @@ except Exception:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Initialize Firebase Admin SDK safely (dev- and prod-friendly)
-if FIREBASE_AVAILABLE:
-    try:
-        if not firebase_admin._apps:
-            FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT') or 'house-hunter-1-2e9f1'
-
-            # 1) Prefer explicit JSON from env (FIREBASE_CREDENTIALS_JSON)
-            creds_json_str = os.getenv('FIREBASE_CREDENTIALS_JSON')
-            # 2) Then explicit path from env
-            service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH') or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            # 3) As a last resort, use local dev file if present
-            default_local_path = str(Path(__file__).resolve().parent / "firebase_service_key.json")
-
-            if creds_json_str:
-                try:
-                    creds_dict = json.loads(creds_json_str)
-                    cred = credentials.Certificate(creds_dict)
-                    firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
-                except Exception as e:
-                    print(f"Invalid FIREBASE_CREDENTIALS_JSON: {e}")
-                    raise
-            elif service_account_path and os.path.exists(service_account_path):
-                cred = credentials.Certificate(service_account_path)
-                firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
-            elif os.path.exists(default_local_path):
-                # Dev-only fallback; ensure this file is gitignored
-                cred = credentials.Certificate(default_local_path)
-                firebase_admin.initialize_app(cred, { 'projectId': FIREBASE_PROJECT_ID })
-            else:
-                # Initialize with explicit projectId so verification works without a key in dev/CI
-                firebase_admin.initialize_app(options={ 'projectId': FIREBASE_PROJECT_ID })
-    except Exception as e:
-        print(f"Firebase init warning (settings): {e}")
-        FIREBASE_AVAILABLE = False
-else:
-    print("Firebase admin not installed - continuing without Firebase features")
-
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-secret-key')
 
@@ -69,6 +22,9 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-secret-key')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
+
+# Custom User Model
+AUTH_USER_MODEL = 'houses.User'
 
 # Application definition
 INSTALLED_APPS = [
@@ -140,8 +96,16 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'houses.auth.FirebaseAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
+}
+
+# JWT settings
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
 # Internationalization

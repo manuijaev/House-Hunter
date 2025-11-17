@@ -7,6 +7,7 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import TenantPage from './pages/TenantPage';
 import LandlordPage from './pages/LandlordPage';
+import AdminPage from './pages/AdminPage';
 import './App.css';
 
 function AppRoutes() {
@@ -36,17 +37,23 @@ function AppRoutes() {
     <Routes>
       <Route
         path="/tenant"
-        element={userType === 'tenant' ? <TenantPage /> : <Navigate to="/landlord" replace />}
+        element={userType === 'tenant' ? <TenantPage /> : <Navigate to="/" replace />}
       />
       <Route
         path="/landlord"
-        element={userType === 'landlord' ? <LandlordPage /> : <Navigate to="/tenant" replace />}
+        element={userType === 'landlord' ? <LandlordPage /> : <Navigate to="/" replace />}
+      />
+      <Route
+        path="/admin"
+        element={userType === 'admin' ? <AdminPage /> : <Navigate to="/" replace />}
       />
       {/* Default redirect based on role */}
       <Route
         path="/"
         element={
-          userType === 'tenant'
+          userType === 'admin'
+            ? <Navigate to="/admin" replace />
+            : userType === 'tenant'
             ? <Navigate to="/tenant" replace />
             : <Navigate to="/landlord" replace />
         }

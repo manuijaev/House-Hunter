@@ -4,8 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { House, Search, User, Key, Lock, Mail, Phone, MapPin, Eye, EyeOff, Home as HomeIcon } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
 import './LoginPage.css';
 import Logo from '../components/Logo';
 
@@ -13,6 +11,7 @@ function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [userType, setUserType] = useState('tenant');
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -53,7 +52,9 @@ function LoginPage() {
   
   useEffect(() => {
     if (currentUser && authUserType) {
-      if (authUserType === 'tenant') {
+      if (authUserType === 'admin') {
+        navigate('/admin');
+      } else if (authUserType === 'tenant') {
         navigate('/tenant');
       } else if (authUserType === 'landlord') {
         navigate('/landlord');
@@ -85,8 +86,8 @@ const handleSubmit = async (e) => {
 
   try {
     if (isLogin) {
-      const userCredential = await login(formData.email, formData.password);
-      console.log("Login success:", userCredential.user.uid);
+      const response = await login(formData.username, formData.password);
+      console.log("Login success");
       toast.success("Login successful!");
     } else {
       if (formData.password !== formData.confirmPassword) {
@@ -101,9 +102,9 @@ const handleSubmit = async (e) => {
         return;
       }
 
-      const userCredential = await signup(formData.email, formData.password, userType);
+      const response = await signup(formData.username, formData.email, formData.password, userType);
 
-      console.log("Signup success:", userCredential.user.uid);
+      console.log("Signup success");
       toast.success("Account created successfully!");
     }
   } catch (error) {
@@ -111,38 +112,12 @@ const handleSubmit = async (e) => {
 
     let errorMessage = "An error occurred. Please try again.";
 
-    if (isLogin) {
-      // Login errors
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect password. Please check your password and try again.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "Invalid email address format.";
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = "This account has been disabled. Please contact support.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many failed login attempts. Please try again later.";
-      } else {
-        errorMessage = "Login failed. Please check your credentials and try again.";
-      }
-    } else {
-      // Signup errors
-      if (error.code === 'auth/invalid-email') {
-        errorMessage = "Invalid email address format.";
-      } else if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "An account with this email address already exists. Please try logging in instead.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "Password is too weak. Please choose a stronger password.";
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = "Email/password accounts are not enabled. Please contact support.";
-      } else if (error.code === 'permission-denied') {
-        errorMessage = "Permission denied. Please check your Firestore security rules to allow authenticated users to write to the users collection.";
-      } else if (error.code === 'unavailable') {
-        errorMessage = "Service temporarily unavailable. Please try again later.";
-      } else {
-        errorMessage = `Registration failed: ${error.message || 'Please try again.'}`;
-      }
-      setError(errorMessage);
+    // Handle Django API errors
+    if (error.message) {
+      errorMessage = error.message;
     }
+
+    setError(errorMessage);
   } finally {
     setLoading(false);
   }
@@ -212,17 +187,45 @@ const handleSubmit = async (e) => {
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form">
-            <div className="form-group">
-              <Mail size={20} className="input-icon" />
-              <input
-                type="email"
-                name="email"
-                placeholder="Email address"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
+            {!isLogin && (
+              <div className="form-group">
+                <User size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="username"
+                  placeholder="Username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            )}
+            {isLogin && (
+              <div className="form-group">
+                <User size={20} className="input-icon" />
+                <input
+                  type="text"
+                  name="username"
+                  placeholder="Username or Email"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            )}
+            {!isLogin && (
+              <div className="form-group">
+                <Mail size={20} className="input-icon" />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email address"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            )}
 
 
             <div className="form-group">

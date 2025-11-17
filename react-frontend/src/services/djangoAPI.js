@@ -1,19 +1,17 @@
-import { auth } from '../firebase/config';
-
 const API_BASE_URL = 'http://localhost:8000/api';
 
-// Get Firebase auth token (for Django JWT middleware)
-export const getAuthToken = async () => {
-  const user = auth.currentUser;
-  if (!user) {
+// Get JWT auth token from localStorage
+export const getAuthToken = () => {
+  const token = localStorage.getItem('access_token');
+  if (!token) {
     throw new Error('No user logged in');
   }
-  return await user.getIdToken();
+  return token;
 };
 
 
 // Universal API call helper
-  
+
 export const makeApiCall = async (endpoint, options = {}) => {
   try {
     let headers = {
@@ -21,12 +19,12 @@ export const makeApiCall = async (endpoint, options = {}) => {
       ...options.headers,
     };
 
-    // Try to attach Firebase token
+    // Try to attach JWT token
     try {
-      const token = await getAuthToken();
+      const token = getAuthToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
     } catch {
-      console.log('⚠ No Firebase user logged in, making public request');
+      console.log('⚠ No JWT token available, making public request');
     }
 
     const fullUrl = `${API_BASE_URL}${endpoint}`;
@@ -185,11 +183,71 @@ export const djangoAPI = {
     return await makeApiCall('/admin/pending-houses/');
   },
 
+  getRejectedHouses: async () => {
+    return await makeApiCall('/admin/rejected-houses/');
+  },
+
   approveHouse: async (houseId) => {
     return await makeApiCall(`/admin/approve-house/${houseId}/`, { method: 'POST' });
   },
 
   rejectHouse: async (houseId) => {
     return await makeApiCall(`/admin/reject-house/${houseId}/`, { method: 'POST' });
+  },
+
+  // =============================
+  // AUTHENTICATION ENDPOINTS
+  // =============================
+
+  register: async (username, email, password, role = 'tenant') => {
+    return await makeApiCall('/auth/register/', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password, role }),
+    });
+  },
+
+  login: async (username, password) => {
+    return await makeApiCall('/auth/login/', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+
+  refreshToken: async (refreshToken) => {
+    return await makeApiCall('/auth/refresh/', {
+      method: 'POST',
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+  },
+
+  getUser: async () => {
+    return await makeApiCall('/auth/user/');
+  },
+
+  getUsers: async () => {
+    return await makeApiCall('/admin/users/');
+  },
+
+  banUser: async (userId) => {
+    return await makeApiCall(`/admin/ban-user/${userId}/`, { method: 'POST' });
+  },
+
+  unbanUser: async (userId) => {
+    return await makeApiCall(`/admin/unban-user/${userId}/`, { method: 'POST' });
+  },
+
+  deleteUser: async (userId) => {
+    return await makeApiCall(`/admin/delete-user/${userId}/`, { method: 'DELETE' });
+  },
+
+  changeHouseStatus: async (houseId, status, reason = '') => {
+    return await makeApiCall(`/admin/change-house-status/${houseId}/`, {
+      method: 'POST',
+      body: JSON.stringify({ status, reason }),
+    });
+  },
+
+  deleteOwnAccount: async () => {
+    return await makeApiCall('/auth/delete-account/', { method: 'DELETE' });
   },
 };

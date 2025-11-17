@@ -1,13 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { djangoAPI } from '../services/djangoAPI';
 
 const AuthContext = createContext();
 
@@ -22,47 +14,42 @@ export const AuthProvider = ({ children }) => {
   const [userRecommendations, setUserRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const signup = async (email, password, userType, userData = {}) => {
+  const signup = async (username, email, password, role = 'tenant') => {
     try {
-      console.log('Attempting to create user with email:', email);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      console.log('Attempting to register user with email:', email);
+      const response = await djangoAPI.register(username, email, password, role);
 
-      // Set display name for the user
-      const displayName = userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : email.split('@')[0];
-      await updateProfile(user, {
-        displayName: displayName
-      });
+      // Store tokens in localStorage
+      localStorage.setItem('access_token', response.tokens.access);
+      localStorage.setItem('refresh_token', response.tokens.refresh);
 
-      console.log('User created successfully:', user.uid);
+      // Update user state immediately after registration
+      setCurrentUser(response.user);
+      setUserType(response.user.role || 'tenant');
 
-      // Save user type and additional data to Firestore
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          email: user.email,
-          userType: userType,
-          displayName: displayName,
-          ...userData,
-          createdAt: new Date().toISOString()
-        });
-        console.log('User data saved to Firestore');
-      } catch (firestoreError) {
-        console.error('Failed to save user data to Firestore:', firestoreError);
-        // Continue with registration even if Firestore save fails
-      }
-      return userCredential;
+      console.log('User registered successfully');
+      return response;
     } catch (error) {
       console.error('Signup error:', error);
       throw error;
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (username, password) => {
     try {
-      console.log('Attempting to login with email:', email);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('Login successful:', userCredential.user.uid);
-      return userCredential;
+      console.log('Attempting to login with username:', username);
+      const response = await djangoAPI.login(username, password);
+
+      // Store tokens in localStorage
+      localStorage.setItem('access_token', response.tokens.access);
+      localStorage.setItem('refresh_token', response.tokens.refresh);
+
+      // Update user state immediately after login
+      setCurrentUser(response.user);
+      setUserType(response.user.role || 'tenant');
+
+      console.log('Login successful');
+      return response;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -71,137 +58,100 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      // Clear tokens from localStorage
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setCurrentUser(null);
+      setUserType(null);
+      setUserPreferences(null);
+      setUserRecommendations([]);
     } catch (error) {
       throw error;
     }
   };
 
   const updateUserPreferences = async (preferences) => {
-    if (!currentUser) return;
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        preferences: preferences
-      });
-      setUserPreferences(preferences);
-    } catch (error) {
-      console.error('Error updating user preferences:', error);
-      throw error;
-    }
+    // For now, just store in local state
+    // In the future, we could add an API endpoint to update user preferences
+    setUserPreferences(preferences);
   };
 
   const updateUserRecommendations = async (recommendations) => {
-    if (!currentUser) return;
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        recommendations: recommendations
-      });
-      setUserRecommendations(recommendations);
-    } catch (error) {
-      console.error('Error updating user recommendations:', error);
-      throw error;
-    }
+    // For now, just store in local state
+    // In the future, we could add an API endpoint to update user recommendations
+    setUserRecommendations(recommendations);
   };
 
-  const fetchUserData = useCallback(async (user) => {
+  const fetchUserData = useCallback(async () => {
     try {
-      console.log('Fetching user data for:', user.uid);
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        console.log('User data found:', userData);
-        setUserType(userData.userType || 'tenant'); // Default to tenant if userType is missing
-        setUserPreferences(userData.preferences || null);
-        setUserRecommendations(userData.recommendations || []);
-
-        // Update displayName if it's not set in Firebase Auth but exists in Firestore
-        if (!user.displayName && userData.displayName) {
-          try {
-            await updateProfile(user, {
-              displayName: userData.displayName
-            });
-            console.log('Updated Firebase Auth displayName from Firestore');
-          } catch (updateError) {
-            console.error('Failed to update displayName:', updateError);
-          }
-        }
-
-        return userData;
-      } else {
-        console.log('No user document found in Firestore, setting default userType');
-        setUserType('tenant'); // Default fallback
-        setUserPreferences(null);
-        setUserRecommendations([]);
-      }
+      console.log('Fetching user data from Django');
+      const userData = await djangoAPI.getUser();
+      console.log('User data found:', userData);
+      setCurrentUser(userData);
+      setUserType(userData.role || 'tenant'); // Use role from Django
+      setUserPreferences(null); // For now, no preferences
+      setUserRecommendations([]);
+      return userData;
     } catch (error) {
       console.error('Error fetching user data:', error);
-      setUserType('tenant'); // Default fallback on error
+      // If token is invalid, clear it
+      if (error.message.includes('401') || error.message.includes('403')) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+      }
+      setCurrentUser(null);
+      setUserType(null);
       setUserPreferences(null);
       setUserRecommendations([]);
     }
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    let timeoutId;
+    const initializeAuth = async () => {
+      const accessToken = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user);
-
-      if (!isMounted) return;
-
-      if (user) {
-        console.log('User found, setting current user and fetching data');
-        setCurrentUser(user);
+      if (accessToken) {
+        console.log('Found existing access token, fetching user data');
         try {
-          await fetchUserData(user);
+          await fetchUserData();
 
-          // Check for pending house redirect after successful authentication
+          // Check for pending redirects
           const pendingHouseId = localStorage.getItem('pendingHouseId');
           if (pendingHouseId) {
             localStorage.removeItem('pendingHouseId');
-            // Store it for the tenant page to prioritize
             localStorage.setItem('pendingHouseRedirect', pendingHouseId);
           }
 
-          // Check for pending favorite house redirect
           const pendingFavoriteHouseId = localStorage.getItem('pendingFavoriteHouseId');
           if (pendingFavoriteHouseId) {
             localStorage.removeItem('pendingFavoriteHouseId');
-            // Store it for the tenant page to show favorites and highlight this house
             localStorage.setItem('pendingFavoriteRedirect', pendingFavoriteHouseId);
           }
         } catch (error) {
-          console.error('Error in fetchUserData:', error);
+          console.error('Error initializing auth:', error);
+          // Token might be expired, try to refresh
+          if (refreshToken) {
+            try {
+              const refreshResponse = await djangoAPI.refreshToken(refreshToken);
+              localStorage.setItem('access_token', refreshResponse.access);
+              await fetchUserData();
+            } catch (refreshError) {
+              console.error('Token refresh failed:', refreshError);
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+            }
+          }
         }
       } else {
-        console.log('No user, clearing state');
-        setCurrentUser(null);
-        setUserType(null);
-        setUserPreferences(null);
-        setUserRecommendations([]);
+        console.log('No access token found');
       }
 
-      if (isMounted) {
-        console.log('Setting loading to false');
-        setLoading(false);
-      }
-    });
-
-    // Set a timeout to prevent infinite loading
-    timeoutId = setTimeout(() => {
-      if (isMounted && loading) {
-        console.log('Loading timeout reached');
-        setLoading(false);
-      }
-    }, 10000); // 10 second timeout
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-      unsubscribe();
+      setLoading(false);
     };
-  }, [fetchUserData, loading]);
+
+    initializeAuth();
+  }, [fetchUserData]);
 
   const value = {
     currentUser,

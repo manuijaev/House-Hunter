@@ -176,8 +176,8 @@ function TenantPage() {
     }
 
     // Load favorites
-    if (currentUser?.uid) {
-      const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.uid}`) || '[]');
+    if (currentUser?.id) {
+      const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.id}`) || '[]');
       setFavoriteHouses(new Set(savedFavorites));
     }
   }, [currentUser]);
@@ -252,7 +252,7 @@ function TenantPage() {
     const fetchTenantLocation = async () => {
       if (currentUser) {
         try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDocRef = doc(db, 'users', currentUser.id?.toString());
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -261,7 +261,7 @@ function TenantPage() {
             setTenantLocation('Nairobi');
           }
         } catch (error) {
-          const savedLocation = localStorage.getItem(`tenant_location_${currentUser.uid}`);
+          const savedLocation = localStorage.getItem(`tenant_location_${currentUser.id}`);
           setTenantLocation(savedLocation || 'Nairobi');
         }
       }
@@ -273,10 +273,10 @@ function TenantPage() {
   useEffect(() => {
     if (!currentUser || houses.length === 0) return;
 
-    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.uid));
+    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.id?.toString()));
     const q2 = query(collection(db, 'messages'), where('receiverEmail', '==', currentUser.email));
 
-    const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+    const processedKey = `tenant_processed_messages_${currentUser.id}`;
     const getProcessedIds = () => {
       try {
         const stored = localStorage.getItem(processedKey);
@@ -300,14 +300,14 @@ function TenantPage() {
     const processMessages = () => {
       const newMessages = allMessages.filter(msg => {
         const houseId = msg.houseId;
-        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadKey = `tenant_last_read_${currentUser.id}_${houseId}`;
         const lastReadTimestamp = localStorage.getItem(lastReadKey);
         const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
         const isNew = msgTime > lastReadTime;
         const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
         const notAlreadyShown = !processedMessageIds.has(msg.id);
-        const isFromLandlord = msg.senderId !== currentUser.uid;
+        const isFromLandlord = msg.senderId !== currentUser.id?.toString();
         return isNew && isNotPrevious && notAlreadyShown && isFromLandlord;
       });
 
@@ -324,11 +324,11 @@ function TenantPage() {
       allMessages.forEach(msg => {
         const houseId = msg.houseId;
         if (!counts[houseId]) counts[houseId] = 0;
-        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadKey = `tenant_last_read_${currentUser.id}_${houseId}`;
         const lastReadTimestamp = localStorage.getItem(lastReadKey);
         const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        if (msgTime > lastReadTime && msg.senderId !== currentUser.uid) {
+        if (msgTime > lastReadTime && msg.senderId !== currentUser.id?.toString()) {
           counts[houseId] += 1;
         }
       });
@@ -369,8 +369,8 @@ function TenantPage() {
     }
     setFavoriteHouses(newFavorites);
     
-    if (currentUser?.uid) {
-      localStorage.setItem(`favorites_${currentUser.uid}`, JSON.stringify([...newFavorites]));
+    if (currentUser?.id) {
+      localStorage.setItem(`favorites_${currentUser.id}`, JSON.stringify([...newFavorites]));
     }
   };
 
@@ -413,14 +413,11 @@ function TenantPage() {
   const handleDeleteAccount = async () => {
     if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        try { 
-          await deleteDoc(userDocRef); 
-        } catch (error) { 
-          console.log('User document not found or already deleted');
-        }
-        await currentUser.delete();
-        toast.success('Account deleted successfully');
+        // Note: Account deletion would need to be implemented in Django backend
+        // For now, just clear local data
+        localStorage.clear();
+        await logout();
+        toast.success('Account data cleared successfully');
       } catch (error) {
         console.error('Delete account error:', error);
         toast.error('Failed to delete account: ' + error.message);
@@ -432,10 +429,10 @@ function TenantPage() {
   // Chat handler
   const handleChat = (house) => {
     if (!house) return;
-    
+
     setSelectedHouseForChat(house);
     setShowChatModal(true);
-    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
+    const lastReadKey = `tenant_last_read_${currentUser.id}_${house.id}`;
     localStorage.setItem(lastReadKey, new Date().toISOString());
     setHouseMessageCounts(prev => ({ ...prev, [house.id]: 0 }));
   };
@@ -443,12 +440,12 @@ function TenantPage() {
   // Payment handler
   const handlePayment = (house) => {
     if (!house) return;
-    
-    if (currentUser?.uid) {
-      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+
+    if (currentUser?.id) {
+      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.id}`) || '[]');
       if (!paidHouses.includes(String(house.id))) {
         paidHouses.push(String(house.id));
-        localStorage.setItem(`paid_houses_${currentUser.uid}`, JSON.stringify(paidHouses));
+        localStorage.setItem(`paid_houses_${currentUser.id}`, JSON.stringify(paidHouses));
         toast.success(`Payment successful! You can now chat with the landlord for ${house.title}`);
       } else {
         toast.info('You have already paid for this house');

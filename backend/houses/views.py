@@ -2,30 +2,53 @@ from rest_framework import generics, permissions, status
 from django.conf import settings
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
 from django.db.models import Q
-from .models import House
+from .models import House, User
 from .serializers import HouseSerializer
 
-# Import Firebase helper for real-time updates
-try:
-    from .firebase_helper import update_house_status_in_firebase
-except ImportError:
-    # Firebase helper not available, continue without it
-    def update_house_status_in_firebase(*args, **kwargs):
-        pass
+
+class IsLandlord(permissions.BasePermission):
+    """Custom permission to only allow landlords to access certain views"""
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'landlord'
+
+
+class IsAdmin(permissions.BasePermission):
+    """Custom permission to only allow admins to access certain views"""
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'admin'
+
+
+class IsOwnerOrAdmin(permissions.BasePermission):
+    """Custom permission to only allow owners of an object or admins to edit it"""
+
+    def has_object_permission(self, request, view, obj):
+        # Allow GET for anyone
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Allow if user is admin
+        if request.user and request.user.is_authenticated and request.user.role == 'admin':
+            return True
+
+        # Allow if user is the landlord of the house
+        return obj.landlord == request.user
+
+# Firebase integration removed - keeping for potential future messaging features
 
 # Public + Landlord view: List approved houses / Create new pending house
 class HouseListCreateView(generics.ListCreateAPIView):
     serializer_class = HouseSerializer
 
     def get_permissions(self):
-        # In dev, unblock auth to avoid 403s during setup
-        if getattr(settings, 'DEBUG', False):
-            return [permissions.AllowAny()]
-        # Public can GET approved/vacant houses; auth required to POST (create)
+        # Public can GET approved/vacant houses; landlords required to POST (create)
         if self.request.method in ('GET',):
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [IsLandlord()]
 
     def get_queryset(self):
         """
@@ -45,25 +68,20 @@ class HouseListCreateView(generics.ListCreateAPIView):
         """
         Landlord posts a house (auto set to pending until admin approves).
         """
-        landlord_name = serializer.validated_data.get('landlord_name') or "Test Landlord"
-        # Attach landlord identity from Firebase-authenticated user when available
-        landlord_uid = getattr(getattr(self.request, 'user', None), 'uid', None)
-        landlord_email = getattr(getattr(self.request, 'user', None), 'email', None)
+        user = self.request.user
+        if not user.is_authenticated:
+            raise permissions.PermissionDenied("You must be logged in to create a house")
+
+        if user.role != 'landlord':
+            raise permissions.PermissionDenied("Only landlords can create houses")
+
+        landlord_name = serializer.validated_data.get('landlord_name') or user.username
         house = serializer.save(
-            landlord_name=landlord_name,  # Replace with request.user.username once auth works
+            landlord=user,
+            landlord_name=landlord_name,
             approval_status='pending',
-            landlord_uid=landlord_uid or serializer.validated_data.get('landlord_uid') or '',
-            landlord_email=landlord_email or serializer.validated_data.get('landlord_email') or ''
-        )
-        
-        # Broadcast initial status to Firebase for real-time updates
-        landlord_id = str(house.landlord.id) if house.landlord else None
-        update_house_status_in_firebase(
-            house_id=house.id,
-            approval_status='pending',
-            is_vacant=house.is_vacant,
-            landlord_id=house.landlord_uid or landlord_id,
-            pending_reason='New listing awaiting admin review'
+            landlord_uid=str(user.id),  # Use Django user ID
+            landlord_email=user.email
         )
 
 
@@ -71,15 +89,7 @@ class HouseListCreateView(generics.ListCreateAPIView):
 class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = House.objects.all()
     serializer_class = HouseSerializer
-
-    def get_permissions(self):
-        # In dev, allow all to simplify local testing
-        if getattr(settings, 'DEBUG', False):
-            return [permissions.AllowAny()]
-        # AllowAny to GET details; require auth to modify/delete
-        if self.request.method in ('GET',):
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+    permission_classes = [IsOwnerOrAdmin]
 
     def update(self, request, *args, **kwargs):
         """Override update to broadcast status changes to Firebase"""
@@ -92,17 +102,10 @@ class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         response = super().update(request, *args, **kwargs)
 
-        if response.status_code == 200:
-            house = self.get_object()
-            landlord_id = str(house.landlord.id) if house.landlord else None
-            pending_reason = getattr(house, 'pending_reason', '') or None
-            update_house_status_in_firebase(
-                house_id=house.id,
-                approval_status=house.approval_status,
-                is_vacant=house.is_vacant,
-                landlord_id=landlord_id,
-                pending_reason=pending_reason
-            )
+        # Note: Firebase real-time updates removed - keeping for potential future use
+        # if response.status_code == 200:
+        #     house = self.get_object()
+        #     # Update logic here if needed
 
         return response
 
@@ -111,57 +114,30 @@ class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
 # 🧱 Landlord dashboard (show their own houses)
 class LandlordHousesView(generics.ListAPIView):
     serializer_class = HouseSerializer
-    # In dev, allow access without auth; in prod require auth
-    def get_permissions(self):
-        if getattr(settings, 'DEBUG', False):
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+    permission_classes = [IsLandlord]
 
     def get_queryset(self):
         """
         Show all houses for landlord dashboard (they see all their houses with status badges).
-        TODO: Filter by authenticated landlord when auth is implemented.
         """
-        # Prioritize Firebase authenticated user
-        request_user = getattr(self.request, 'user', None)
-        uid = getattr(request_user, 'uid', None)
-        if uid:
-            return House.objects.filter(landlord_uid=uid)
+        user = self.request.user
+        if not user.is_authenticated:
+            return House.objects.none()
 
-        # Fallback to query parameter (useful in DEBUG/dev when auth is open)
-        # Check multiple possible parameter names for landlord ID
-        uid_param = (
-            self.request.GET.get('landlord_uid') or
-            self.request.GET.get('uid') or
-            self.request.GET.get('landlordId') or
-            self.request.GET.get('landlord_id')
-        )
+        if user.role != 'landlord':
+            return House.objects.none()
 
-        if uid_param:
-            # Filter by landlord_uid field in the database
-            return House.objects.filter(landlord_uid=uid_param)
-
-        # If we cannot determine landlord, return empty queryset
-        return House.objects.none()
+        return House.objects.filter(landlord=user)
 
 
 # 🛠️ Admin-only endpoints: Approve / Reject houses
 @api_view(['POST'])
-@permission_classes([permissions.IsAdminUser])
+@permission_classes([IsAdmin])
 def approve_house(request, house_id):
     try:
         house = House.objects.get(id=house_id)
         house.approval_status = 'approved'
         house.save()
-        
-        # Broadcast status change to Firebase for real-time updates
-        landlord_id = str(house.landlord.id) if house.landlord else None
-        update_house_status_in_firebase(
-            house_id=house_id,
-            approval_status='approved',
-            is_vacant=house.is_vacant,
-            landlord_id=landlord_id
-        )
         
         return Response({'message': 'House approved successfully'}, status=status.HTTP_200_OK)
     except House.DoesNotExist:
@@ -169,21 +145,12 @@ def approve_house(request, house_id):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAdminUser])
+@permission_classes([IsAdmin])
 def reject_house(request, house_id):
     try:
         house = House.objects.get(id=house_id)
         house.approval_status = 'rejected'
         house.save()
-        
-        # Broadcast status change to Firebase for real-time updates
-        landlord_id = str(house.landlord.id) if house.landlord else None
-        update_house_status_in_firebase(
-            house_id=house_id,
-            approval_status='rejected',
-            is_vacant=house.is_vacant,
-            landlord_id=landlord_id
-        )
         
         return Response({'message': 'House rejected successfully'}, status=status.HTTP_200_OK)
     except House.DoesNotExist:
@@ -193,10 +160,240 @@ def reject_house(request, house_id):
 # 🕓 Admin dashboard: Pending houses
 class PendingHousesView(generics.ListAPIView):
     serializer_class = HouseSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get_queryset(self):
         """
         Only pending houses (for approval panel)
         """
         return House.objects.filter(approval_status='pending')
+
+
+# 🗑️ Admin dashboard: Rejected houses
+class RejectedHousesView(generics.ListAPIView):
+    serializer_class = HouseSerializer
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        """
+        Only rejected houses (for review panel)
+        """
+        return House.objects.filter(approval_status='rejected')
+
+
+# 🔐 Authentication Views
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def register(request):
+    """Register a new user"""
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    role = request.data.get('role', 'tenant')  # Default to tenant
+
+    if not username or not email or not password:
+        return Response({'error': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(email=email).exists():
+        return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if role not in ['tenant', 'landlord', 'admin']:
+        return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.create_user(username=username, email=email, password=password, role=role)
+    refresh = RefreshToken.for_user(user)
+
+    return Response({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role
+        },
+        'tokens': {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def login(request):
+    """Login user and return JWT tokens"""
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+        return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Try to authenticate with username first
+    user = authenticate(username=username, password=password)
+
+    # If authentication fails and username contains '@', try treating it as email
+    if user is None and '@' in username:
+        try:
+            user_obj = User.objects.get(email=username)
+            user = authenticate(username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            pass
+
+    if user is None:
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Check if user is banned
+    if user.is_banned:
+        return Response({
+            'error': 'Your account has been banned. Please contact an administrator to review your account.'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    refresh = RefreshToken.for_user(user)
+
+    return Response({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role
+        },
+        'tokens': {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_user(request):
+    """Get current logged-in user info"""
+    user = request.user
+    return Response({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'role': user.role
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def get_users(request):
+    """Get all users (admin only)"""
+    users = User.objects.all().order_by('-date_joined')
+    user_data = []
+    for user in users:
+        user_data.append({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'date_joined': user.date_joined.isoformat(),
+            'is_active': user.is_active,
+            'is_banned': user.is_banned,
+            'last_login': user.last_login.isoformat() if user.last_login else None
+        })
+
+    return Response(user_data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def ban_user(request, user_id):
+    """Ban a user account (admin only)"""
+    try:
+        user = User.objects.get(id=user_id)
+        user.is_banned = True
+        user.save()
+
+        return Response({'message': f'User {user.username} has been banned successfully'}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def unban_user(request, user_id):
+    """Unban a user account (admin only)"""
+    try:
+        user = User.objects.get(id=user_id)
+        user.is_banned = False
+        user.save()
+
+        return Response({'message': f'User {user.username} has been unbanned successfully'}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAdmin])
+def delete_user(request, user_id):
+    """Delete a user account (admin only)"""
+    try:
+        user = User.objects.get(id=user_id)
+
+        # Prevent deleting admin accounts
+        if user.role == 'admin':
+            return Response({'error': 'Cannot delete admin accounts'}, status=status.HTTP_400_BAD_REQUEST)
+
+        username = user.username
+
+        # Delete all houses associated with this user if they are a landlord
+        if user.role == 'landlord':
+            House.objects.filter(landlord=user).delete()
+
+        user.delete()
+
+        return Response({'message': f'User {username} has been deleted successfully'}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_own_account(request):
+    """Allow users to delete their own account"""
+    user = request.user
+    username = user.username
+
+    # Prevent deleting admin accounts
+    if user.role == 'admin':
+        return Response({'error': 'Cannot delete admin accounts'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Delete all houses associated with this user if they are a landlord
+    if user.role == 'landlord':
+        House.objects.filter(landlord=user).delete()
+
+    user.delete()
+
+    return Response({'message': f'Account {username} has been deleted successfully'}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def change_house_status(request, house_id):
+    """Allow admins to change house status (approved/rejected houses can be modified)"""
+    try:
+        house = House.objects.get(id=house_id)
+
+        if house.approval_status not in ['approved', 'rejected']:
+            return Response({'error': 'Can only change status of approved or rejected houses'}, status=status.HTTP_400_BAD_REQUEST)
+
+        new_status = request.data.get('status')
+        if new_status not in ['pending', 'approved', 'rejected']:
+            return Response({'error': 'Status must be pending, approved, or rejected'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Prevent changing to the same status
+        if new_status == house.approval_status:
+            return Response({'error': f'House is already {new_status}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        house.approval_status = new_status
+        house.pending_reason = request.data.get('reason', f'Changed to {new_status} by admin')
+        house.save()
+
+        return Response({'message': f'House status changed to {new_status} successfully'}, status=status.HTTP_200_OK)
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)

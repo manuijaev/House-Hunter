@@ -247,7 +247,7 @@ function TenantPage() {
     const fetchTenantLocation = async () => {
       if (currentUser) {
         try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDocRef = doc(db, 'users', currentUser.id?.toString());
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -257,16 +257,16 @@ function TenantPage() {
             setTenantLocation('Nairobi');
           }
         } catch (error) {
-          const savedLocation = localStorage.getItem(`tenant_location_${currentUser.uid}`);
+          const savedLocation = localStorage.getItem(`tenant_location_${currentUser.id}`);
           setTenantLocation(savedLocation || 'Nairobi');
         }
       }
     };
 
     // Load favorites from localStorage
-    if (currentUser?.uid) {
+    if (currentUser?.id) {
       try {
-        const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.uid}`) || '[]');
+        const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.id}`) || '[]');
         const favoritesSet = new Set(savedFavorites);
         setFavoriteHouses(favoritesSet);
 
@@ -280,7 +280,7 @@ function TenantPage() {
             const newFavorites = new Set(favoritesSet);
             newFavorites.add(String(pendingFavoriteHouseId));
             setFavoriteHouses(newFavorites);
-            localStorage.setItem(`favorites_${currentUser.uid}`, JSON.stringify(Array.from(newFavorites)));
+            localStorage.setItem(`favorites_${currentUser.id}`, JSON.stringify(Array.from(newFavorites)));
             toast.success('Property added to favorites!', { duration: 2000 });
           }
 
@@ -313,10 +313,10 @@ function TenantPage() {
   useEffect(() => {
     if (!currentUser || houses.length === 0) return;
 
-    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.uid));
+    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.id?.toString()));
     const q2 = query(collection(db, 'messages'), where('receiverEmail', '==', currentUser.email));
 
-    const processedKey = `tenant_processed_messages_${currentUser.uid}`;
+    const processedKey = `tenant_processed_messages_${currentUser.id}`;
     const getProcessedIds = () => {
       try {
         const stored = localStorage.getItem(processedKey);
@@ -377,12 +377,12 @@ function TenantPage() {
           counts[houseId] = 0;
         }
 
-        const lastReadKey = `tenant_last_read_${currentUser.uid}_${houseId}`;
+        const lastReadKey = `tenant_last_read_${currentUser.id}_${houseId}`;
         const lastReadTimestamp = localStorage.getItem(lastReadKey);
         const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
 
-        if (msgTime > lastReadTime && msg.senderId !== currentUser.uid) {
+        if (msgTime > lastReadTime && msg.senderId !== currentUser.id?.toString()) {
           counts[houseId] += 1;
         }
       });
@@ -436,15 +436,11 @@ function TenantPage() {
   const handleDeleteAccount = async () => {
     if (window.confirm('CRITICAL: Are you sure you want to delete your account? This will permanently remove ALL your data and preferences. This action cannot be undone!')) {
       try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        try {
-          await deleteDoc(userDocRef);
-        } catch (error) {
-          console.log('User document not found or already deleted');
-        }
-
-        await currentUser.delete();
-        toast.success('Account deleted successfully', { duration: 5000 });
+        // Note: Account deletion would need to be implemented in Django backend
+        // For now, just clear local data
+        localStorage.clear();
+        await logout();
+        toast.success('Account data cleared successfully', { duration: 5000 });
       } catch (error) {
         console.error('Delete account error:', error);
         toast.error('Failed to delete account: ' + error.message);
@@ -457,7 +453,7 @@ function TenantPage() {
   const handleChat = (house) => {
     setSelectedHouseForChat(house);
     setShowChatModal(true);
-    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
+    const lastReadKey = `tenant_last_read_${currentUser.id}_${house.id}`;
     localStorage.setItem(lastReadKey, new Date().toISOString());
     setHouseMessageCounts(prev => ({
       ...prev,
@@ -467,11 +463,11 @@ function TenantPage() {
 
   // Enhanced payment handling
   const handlePayment = (house) => {
-    if (currentUser?.uid) {
-      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+    if (currentUser?.id) {
+      const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.id}`) || '[]');
       if (!paidHouses.includes(String(house.id))) {
         paidHouses.push(String(house.id));
-        localStorage.setItem(`paid_houses_${currentUser.uid}`, JSON.stringify(paidHouses));
+        localStorage.setItem(`paid_houses_${currentUser.id}`, JSON.stringify(paidHouses));
         toast.success(`Payment successful! You can now chat with the landlord and see full contact details for ${house.title}`, {
           duration: 6000
         });
@@ -516,7 +512,7 @@ function TenantPage() {
 
   // Favorites handling
   const handleToggleFavorite = (houseId, isFavorited) => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.id) return;
 
     const newFavorites = new Set(favoriteHouses);
     if (isFavorited) {
@@ -528,10 +524,10 @@ function TenantPage() {
     }
 
     setFavoriteHouses(newFavorites);
-    
+
     // Persist to localStorage
     try {
-      localStorage.setItem(`favorites_${currentUser.uid}`, JSON.stringify(Array.from(newFavorites)));
+      localStorage.setItem(`favorites_${currentUser.id}`, JSON.stringify(Array.from(newFavorites)));
     } catch (error) {
       console.error('Error saving favorites:', error);
     }

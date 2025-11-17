@@ -1227,6 +1227,72 @@
   transform: translateY(-2px);
 }
 
+/* Admin Actions */
+.admin-actions-enhanced {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.pending-btn-enhanced,
+.reject-btn-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  flex: 1;
+  justify-content: center;
+  min-width: 90px;
+}
+
+.pending-btn-enhanced {
+  background: var(--warning-color);
+  color: white;
+}
+
+.pending-btn-enhanced:hover {
+  background: #e67e22;
+  transform: translateY(-2px);
+}
+
+.reject-btn-enhanced {
+  background: var(--danger-color);
+  color: white;
+}
+
+.reject-btn-enhanced:hover {
+  background: #c0392b;
+  transform: translateY(-2px);
+}
+
+.admin-status-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.status-text.approved {
+  color: var(--success-color);
+}
+
+.status-text.rejected {
+  color: var(--danger-color);
+}
+
 /* Enhanced Hover Overlay */
 .card-overlay-enhanced {
   position: absolute;

@@ -1,5 +1,17 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
+
+class User(AbstractUser):
+    ROLE_CHOICES = (
+        ('tenant', 'Tenant'),
+        ('landlord', 'Landlord'),
+        ('admin', 'Admin'),
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='tenant')
+    is_banned = models.BooleanField(default=False, help_text="Whether the user account is banned")
+
+    def __str__(self):
+        return f"{self.username} ({self.role})"
 
 class House(models.Model):
     APPROVAL_STATUS = [
@@ -27,7 +39,7 @@ class House(models.Model):
     amenities = models.JSONField(default=list)
     
     # 🎯 MAKE LANDLORD OPTIONAL TEMPORARILY
-    landlord = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    landlord = models.ForeignKey('User', on_delete=models.CASCADE, null=True, blank=True)
     landlord_name = models.CharField(max_length=100, default='Landlord')
     # Firebase identity for landlord scoping
     landlord_uid = models.CharField(max_length=128, blank=True, default='')

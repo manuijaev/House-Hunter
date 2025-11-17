@@ -108,9 +108,9 @@ function LandlordDashboard() {
     const fetchLandlordHouses = async () => {
       try {
         setLoading(true);
-        const data = await djangoAPI.getLandlordHouses(currentUser.uid);
+        const data = await djangoAPI.getLandlordHouses(currentUser?.id?.toString());
         const housesArray = Array.isArray(data) ? data : [];
-        
+
         // Enhanced house data with dynamic properties
         const enhancedHouses = housesArray.map(house => ({
           ...house,
@@ -122,7 +122,7 @@ function LandlordDashboard() {
           views: Math.floor(Math.random() * 1000) + 100,
           rating: (Math.random() * 2 + 3).toFixed(1) // 3.0 - 5.0
         }));
-        
+
         setHouses(enhancedHouses);
         setFilteredHouses(enhancedHouses);
       } catch (err) {
@@ -132,8 +132,8 @@ function LandlordDashboard() {
         setLoading(false);
       }
     };
-    
-    if (currentUser?.uid) fetchLandlordHouses();
+
+    if (currentUser?.id) fetchLandlordHouses();
   }, [currentUser]);
 
   useEffect(() => {
@@ -201,7 +201,7 @@ function LandlordDashboard() {
   // ----------------------------------------------------------------------
   const refreshHouses = useCallback(async () => {
     try {
-      const data = await djangoAPI.getLandlordHouses(currentUser.uid);
+      const data = await djangoAPI.getLandlordHouses(currentUser?.id?.toString());
       const housesArray = Array.isArray(data) ? data : [];
       const housesWithStatus = housesArray.map(house => ({
         ...house,
@@ -218,7 +218,7 @@ function LandlordDashboard() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.id) return;
 
     let unsubscribe = null;
     let djangoDataLoaded = false;
@@ -285,10 +285,10 @@ function LandlordDashboard() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.uid));
+    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.id?.toString()));
     const q2 = query(collection(db, 'messages'), where('receiverEmail', '==', currentUser.email));
 
-    const processedKey = `landlord_processed_messages_${currentUser.uid}`;
+    const processedKey = `landlord_processed_messages_${currentUser.id}`;
     const getProcessedIds = () => {
       try {
         const stored = localStorage.getItem(processedKey);
@@ -310,7 +310,7 @@ function LandlordDashboard() {
     let allMessages = [];
 
     const processMessages = () => {
-      const lastReadKey = `landlord_last_read_${currentUser.uid}`;
+      const lastReadKey = `landlord_last_read_${currentUser.id}`;
       const lastReadTimestamp = localStorage.getItem(lastReadKey);
       const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
 
@@ -319,15 +319,15 @@ function LandlordDashboard() {
         const isNew = msgTime > lastReadTime;
         const isNotPrevious = !previousMessages.some((prev) => prev.id === msg.id);
         const notAlreadyShown = !processedMessageIds.has(msg.id);
-        const isFromTenant = msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email;
-        
+        const isFromTenant = msg.senderId !== currentUser.id?.toString() && msg.senderEmail !== currentUser.email;
+
         return isNew && isNotPrevious && notAlreadyShown && isFromTenant;
       });
 
       newMessages.forEach((msg) => {
-        if (msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email) {
+        if (msg.senderId !== currentUser.id?.toString() && msg.senderEmail !== currentUser.email) {
           const tenantEmail = msg.senderEmail || msg.senderName || 'Tenant';
-          toast.success(`💬 New message from ${tenantEmail}`, { 
+          toast.success(`💬 New message from ${tenantEmail}`, {
             duration: 5000,
             position: 'bottom-right'
           });
@@ -340,7 +340,7 @@ function LandlordDashboard() {
 
       const unreadCount = allMessages.filter((msg) => {
         const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        const isFromTenant = msg.senderId !== currentUser.uid && msg.senderEmail !== currentUser.email;
+        const isFromTenant = msg.senderId !== currentUser.id?.toString() && msg.senderEmail !== currentUser.email;
         return msgTime > lastReadTime && isFromTenant;
       }).length;
 
@@ -380,8 +380,8 @@ function LandlordDashboard() {
     try {
       const basePayload = {
         ...houseData,
-        landlordId: currentUser.uid,
-        landlordName: houseData.displayName || currentUser.displayName || 'Landlord',
+        landlordId: currentUser?.id?.toString(),
+        landlordName: houseData.displayName || currentUser?.username || 'Landlord',
         createdAt: new Date().toISOString(),
         isVacant: true,
         approval_status: 'pending',
@@ -522,8 +522,7 @@ function LandlordDashboard() {
     occupiedProperties: houses.filter(h => !h.isVacant).length,
     approvedProperties: houses.filter(h => h.approval_status === 'approved').length,
     pendingProperties: houses.filter(h => h.approval_status === 'pending').length,
-    totalViews: houses.reduce((sum, house) => sum + (house.views || 0), 0),
-    averageRating: houses.length > 0 
+    totalViews: houses.reduce((sum, house) => sum + (house.views || 0), 0)
       ? (houses.reduce((sum, house) => sum + parseFloat(house.rating || 0), 0) / houses.length).toFixed(1)
       : '0.0'
   };
@@ -538,8 +537,8 @@ function LandlordDashboard() {
       const byIdSnap = await getDocs(byIdQuery);
       if (!byIdSnap.empty) return byIdSnap.docs;
 
-      if (currentUser?.uid) {
-        const byOwnerQuery = query(housesCol, where('landlordId', '==', currentUser.uid));
+      if (currentUser?.id) {
+        const byOwnerQuery = query(housesCol, where('landlordId', '==', currentUser.id.toString()));
         const byOwnerSnap = await getDocs(byOwnerQuery);
         return byOwnerSnap.docs || [];
       }
@@ -555,48 +554,51 @@ function LandlordDashboard() {
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('👋 Successfully logged out!', { duration: 3000 });
+      toast.success('Successfully logged out!', { duration: 3000 });
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('❌ Logout failed');
+      toast.error('Logout failed');
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!window.confirm('🚨 CRITICAL: Are you sure you want to delete your account? This will permanently remove ALL your properties and data. This action cannot be undone!')) {
+    if (!window.confirm('CRITICAL: Are you sure you want to delete your account? This will permanently remove ALL your properties and data. This action cannot be undone!')) {
       setShowDropdown(false);
       return;
     }
     try {
-      const housesToDelete = houses.map((h) => deleteDoc(doc(db, 'houses', h.id)));
-      await Promise.all(housesToDelete);
-
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      try { await deleteDoc(userDocRef); } catch (err) { /* ignore */ }
-
-      await currentUser.delete();
-      toast.success('🗑️ Account and all data deleted successfully', { duration: 5000 });
+      await djangoAPI.deleteOwnAccount();
+      await logout();
+      toast.success('Account deleted successfully', { duration: 5000 });
+      // Redirect to login page
+      window.location.href = '/login';
     } catch (error) {
       console.error('Delete account error:', error);
-      toast.error('❌ Failed to delete account: ' + (error?.message || ''));
+      toast.error('Failed to delete account: ' + (error?.message || ''));
     }
     setShowDropdown(false);
   };
 
   const handleResetImages = async () => {
-    if (!window.confirm('⚠️ Are you sure you want to reset everything? This will delete ALL your properties, images, and data. This cannot be undone!')) {
+    if (!window.confirm('Are you sure you want to reset everything? This will delete ALL your properties, images, and data from all dashboards. This cannot be undone!')) {
       setShowDropdown(false);
       return;
     }
     try {
-      const housesToDelete = houses.map((h) => deleteDoc(doc(db, 'houses', h.id)));
-      await Promise.all(housesToDelete);
+      // Delete all houses from Django (this will remove them from all dashboards)
+      const deletePromises = houses.map((house) => djangoAPI.deleteHouse(house.id));
+      await Promise.all(deletePromises);
+
+      // Also delete from Firebase for consistency
+      const firebaseDeletePromises = houses.map((h) => deleteDoc(doc(db, 'houses', h.id)));
+      await Promise.all(firebaseDeletePromises);
+
       clearAllImagesFromLocalStorage();
       setHouses([]);
-      toast.success('🔄 All properties and images have been reset', { duration: 5000 });
+      toast.success('All properties and images have been reset from all dashboards', { duration: 5000 });
     } catch (error) {
       console.error('Reset error:', error);
-      toast.error('❌ Failed to reset data: ' + (error?.message || ''));
+      toast.error('Failed to reset data: ' + (error?.message || ''));
     }
     setShowDropdown(false);
   };
@@ -635,7 +637,7 @@ function LandlordDashboard() {
                   className="chat-btn dynamic-btn primary-btn"
                   onClick={() => {
                     setActiveTab('chat');
-                    localStorage.setItem(`landlord_last_read_${currentUser.uid}`, new Date().toISOString());
+                    localStorage.setItem(`landlord_last_read_${currentUser.id}`, new Date().toISOString());
                     setUnreadMessages(0);
                   }}
                 >
@@ -891,35 +893,19 @@ function LandlordDashboard() {
                 <p className="stat-trend">Under review</p>
               </div>
 
-              <div className="stat-card info">
-                <div className="stat-icon">
-                  <Eye size={24} />
-                </div>
-                <h3>Total Views</h3>
-                <p className="stat-number">{analyticsData.totalViews}</p>
-                <p className="stat-trend">Property visibility</p>
-              </div>
+            
 
               <div className="stat-card accent">
                 <div className="stat-icon">
                   <TrendingUp size={24} />
                 </div>
-                <h3>House Views</h3>
+                <h3>Total house Views</h3>
                 <p className="stat-number">
                   {houses.reduce((total, house) => {
                     return total + (parseInt(localStorage.getItem(`house_views_${house.id}`) || '0'));
                   }, 0)}
                 </p>
                 <p className="stat-trend">Card interactions</p>
-              </div>
-
-              <div className="stat-card accent">
-                <div className="stat-icon">
-                  <Star size={24} />
-                </div>
-                <h3>Avg Rating</h3>
-                <p className="stat-number">{analyticsData.averageRating}</p>
-                <p className="stat-trend">⭐ out of 5</p>
               </div>
 
               <div className="stat-card secondary">

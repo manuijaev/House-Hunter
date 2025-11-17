@@ -75,6 +75,8 @@ function HouseCard({
   onFavorite,
   onShare,
   onQuickView,
+  onApprove,
+  onReject,
   userType,
   isDarkMode,
   messageCount = 0,
@@ -82,6 +84,7 @@ function HouseCard({
   isFavorite = false,
   isFeatured = false,
   showActions = true,
+  showAdminActions = false,
   animationDelay = 0
 }) {
   // Safety check for house object
@@ -365,6 +368,20 @@ function HouseCard({
       }
     }
   }, [houseData?.id, onDelete]);
+
+  const handleChangeStatus = useCallback(async (newStatus, reason) => {
+    if (!houseData?.id) return;
+
+    try {
+      await djangoAPI.changeHouseStatus(houseData.id, newStatus, reason);
+      toast.success(`House status changed to ${newStatus}`);
+      // Trigger a refresh of the house data
+      window.location.reload();
+    } catch (error) {
+      console.error('HouseCard: failed to change house status', error);
+      toast.error('Failed to change house status: ' + (error?.message || ''));
+    }
+  }, [houseData?.id]);
 
   // Enhanced amenity rendering with better icons
   const renderAmenities = useMemo(() => {
@@ -789,6 +806,92 @@ function HouseCard({
                     <Trash2 size={16} />
                     <span>Delete</span>
                   </button>
+                </div>
+              )}
+
+              {userType === 'admin' && showAdminActions && (
+                <div className="admin-actions-enhanced">
+                  {approvalStatus === 'pending' && (
+                    <>
+                      <button
+                        className="approve-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onApprove && onApprove(houseData.id);
+                        }}
+                      >
+                        <CheckCircle size={16} />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        className="reject-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReject && onReject(houseData.id);
+                        }}
+                      >
+                        <X size={16} />
+                        <span>Reject</span>
+                      </button>
+                    </>
+                  )}
+                  {approvalStatus === 'approved' && (
+                    <>
+                      <button
+                        className="pending-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // We'll add this handler
+                          if (window.confirm('Change this approved house back to pending status?')) {
+                            handleChangeStatus('pending', 'Changed back to pending by admin');
+                          }
+                        }}
+                      >
+                        <Clock size={16} />
+                        <span>Make Pending</span>
+                      </button>
+                      <button
+                        className="reject-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Reject this approved house?')) {
+                            handleChangeStatus('rejected', 'Rejected by admin');
+                          }
+                        }}
+                      >
+                        <X size={16} />
+                        <span>Reject</span>
+                      </button>
+                    </>
+                  )}
+                  {approvalStatus === 'rejected' && (
+                    <>
+                      <button
+                        className="pending-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Change this rejected house back to pending status?')) {
+                            handleChangeStatus('pending', 'Changed back to pending by admin');
+                          }
+                        }}
+                      >
+                        <Clock size={16} />
+                        <span>Make Pending</span>
+                      </button>
+                      <button
+                        className="approve-btn-enhanced"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Approve this previously rejected house?')) {
+                            handleChangeStatus('approved', 'Approved by admin');
+                          }
+                        }}
+                      >
+                        <CheckCircle size={16} />
+                        <span>Approve</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
