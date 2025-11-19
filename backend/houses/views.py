@@ -5,8 +5,76 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from .models import House, User
-from .serializers import HouseSerializer
+from .models import House, User, Message, Payment
+from .serializers import HouseSerializer, MessageSerializer
+import requests
+import base64
+import json
+from datetime import datetime
+import os
+
+
+# M-Pesa API Configuration
+MPESA_CONFIG = {
+    'consumer_key': os.getenv('MPESA_CONSUMER_KEY'),
+    'consumer_secret': os.getenv('MPESA_CONSUMER_SECRET'),
+    'shortcode': os.getenv('MPESA_SHORTCODE'),
+    'passkey': os.getenv('MPESA_PASSKEY'),
+    'environment': os.getenv('MPESA_ENVIRONMENT', 'sandbox')
+}
+
+def get_mpesa_access_token():
+    """Get OAuth access token from M-Pesa"""
+    if MPESA_CONFIG['environment'] == 'sandbox':
+        url = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+    else:
+        url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+
+    response = requests.get(url, auth=(MPESA_CONFIG['consumer_key'], MPESA_CONFIG['consumer_secret']))
+
+    if response.status_code == 200:
+        return response.json()['access_token']
+    else:
+        raise Exception(f"Failed to get access token: {response.text}")
+
+def generate_password():
+    """Generate password for STK push"""
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    password_str = MPESA_CONFIG['shortcode'] + MPESA_CONFIG['passkey'] + timestamp
+    password = base64.b64encode(password_str.encode()).decode()
+    return password, timestamp
+
+def initiate_stk_push(phone_number, amount, account_reference, transaction_desc):
+    """Initiate STK push payment"""
+    access_token = get_mpesa_access_token()
+    password, timestamp = generate_password()
+
+    if MPESA_CONFIG['environment'] == 'sandbox':
+        url = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+    else:
+        url = 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    payload = {
+        'BusinessShortCode': MPESA_CONFIG['shortcode'],
+        'Password': password,
+        'Timestamp': timestamp,
+        'TransactionType': 'CustomerPayBillOnline',
+        'Amount': amount,
+        'PartyA': phone_number,
+        'PartyB': MPESA_CONFIG['shortcode'],
+        'PhoneNumber': phone_number,
+        'CallBackURL': f"{settings.BASE_URL}/api/payments/callback/",
+        'AccountReference': account_reference,
+        'TransactionDesc': transaction_desc
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    return response.json()
 
 
 class IsLandlord(permissions.BasePermission):
@@ -153,6 +221,234 @@ def reject_house(request, house_id):
         house.save()
         
         return Response({'message': 'House rejected successfully'}, status=status.HTTP_200_OK)
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+# Message Views
+class MessageListCreateView(generics.ListCreateAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Get messages for the current user (sent or received)
+        """
+        user = self.request.user
+        return Message.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).select_related('sender', 'receiver', 'house')
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
+
+
+class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Users can only access messages they sent or received
+        """
+        user = self.request.user
+        return Message.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).select_related('sender', 'receiver', 'house')
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_house_messages(request, house_id):
+    """
+    Get all messages for a specific house between the current user and the other party
+    """
+    try:
+        house = House.objects.get(id=house_id)
+        user = request.user
+
+        # Find the other user in the conversation (landlord or tenant)
+        if user.role == 'landlord':
+            # Landlord sees messages with any tenant for this house
+            messages = Message.objects.filter(
+                Q(house=house) & (Q(sender=user) | Q(receiver=user))
+            ).select_related('sender', 'receiver', 'house').order_by('timestamp')
+        else:
+            # Tenant sees messages with the landlord for this house
+            landlord = house.landlord
+            if not landlord:
+                return Response({'messages': []}, status=status.HTTP_200_OK)
+
+            messages = Message.objects.filter(
+                Q(house=house) & (
+                    (Q(sender=user) & Q(receiver=landlord)) |
+                    (Q(sender=landlord) & Q(receiver=user))
+                )
+            ).select_related('sender', 'receiver', 'house').order_by('timestamp')
+
+        serializer = MessageSerializer(messages, many=True)
+        return Response({'messages': serializer.data}, status=status.HTTP_200_OK)
+
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+# Payment Views
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def initiate_payment(request):
+    """Initiate M-Pesa STK Push payment"""
+    try:
+        phone_number = request.data.get('phone_number')
+        amount = request.data.get('amount')
+        account_reference = request.data.get('account_reference', f"USER_{request.user.id}")
+        transaction_desc = request.data.get('transaction_desc', 'House payment')
+        house_id = request.data.get('house_id')
+
+        if not phone_number or not amount:
+            return Response({'error': 'Phone number and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate phone number format (should start with 254)
+        if not phone_number.startswith('254') or len(phone_number) != 12:
+            return Response({'error': 'Phone number must be in format 254XXXXXXXXX'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create payment record
+        payment = Payment.objects.create(
+            amount=amount,
+            phone_number=phone_number,
+            account_reference=account_reference,
+            transaction_desc=transaction_desc,
+            user=request.user,
+            house_id=house_id if house_id else None
+        )
+
+        # Initiate STK push
+        stk_response = initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
+
+        if stk_response.get('ResponseCode') == '0':
+            # Update payment with M-Pesa response
+            payment.merchant_request_id = stk_response.get('MerchantRequestID')
+            payment.checkout_request_id = stk_response.get('CheckoutRequestID')
+            payment.save()
+
+            return Response({
+                'message': 'STK push initiated successfully',
+                'payment_id': payment.id,
+                'merchant_request_id': payment.merchant_request_id,
+                'checkout_request_id': payment.checkout_request_id,
+                'response': stk_response
+            }, status=status.HTTP_200_OK)
+        else:
+            payment.status = 'failed'
+            payment.result_desc = stk_response.get('ResponseDescription', 'STK push failed')
+            payment.save()
+
+            return Response({
+                'error': 'Failed to initiate STK push',
+                'details': stk_response
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])  # M-Pesa callback doesn't include auth
+def mpesa_callback(request):
+    """Handle M-Pesa payment callback"""
+    try:
+        callback_data = request.data
+
+        # Extract callback metadata
+        merchant_request_id = callback_data.get('Body', {}).get('stkCallback', {}).get('MerchantRequestID')
+        checkout_request_id = callback_data.get('Body', {}).get('stkCallback', {}).get('CheckoutRequestID')
+        result_code = callback_data.get('Body', {}).get('stkCallback', {}).get('ResultCode')
+        result_desc = callback_data.get('Body', {}).get('stkCallback', {}).get('ResultDesc')
+
+        # Find the payment record
+        try:
+            payment = Payment.objects.get(
+                merchant_request_id=merchant_request_id,
+                checkout_request_id=checkout_request_id
+            )
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update payment status
+        if result_code == 0:
+            # Payment successful
+            callback_metadata = callback_data.get('Body', {}).get('stkCallback', {}).get('CallbackMetadata', {}).get('Item', [])
+
+            # Extract transaction details
+            for item in callback_metadata:
+                if item.get('Name') == 'MpesaReceiptNumber':
+                    payment.mpesa_receipt_number = item.get('Value')
+                elif item.get('Name') == 'TransactionDate':
+                    # Could store transaction date if needed
+                    pass
+                elif item.get('Name') == 'PhoneNumber':
+                    # Verify phone number matches
+                    pass
+
+            payment.status = 'completed'
+            payment.result_desc = result_desc
+        else:
+            # Payment failed
+            payment.status = 'failed'
+            payment.result_desc = result_desc
+
+        payment.save()
+
+        return Response({'message': 'Callback processed successfully'}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_user_payments(request):
+    """Get payment history for authenticated user"""
+    payments = Payment.objects.filter(user=request.user).order_by('-created_at')
+    payment_data = []
+
+    for payment in payments:
+        payment_data.append({
+            'id': payment.id,
+            'amount': payment.amount,
+            'phone_number': payment.phone_number,
+            'account_reference': payment.account_reference,
+            'transaction_desc': payment.transaction_desc,
+            'status': payment.status,
+            'mpesa_receipt_number': payment.mpesa_receipt_number,
+            'result_desc': payment.result_desc,
+            'created_at': payment.created_at.isoformat(),
+            'house_id': payment.house.id if payment.house else None,
+            'house_title': payment.house.title if payment.house else None
+        })
+
+    return Response({'payments': payment_data}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mark_messages_read(request, house_id):
+    """
+    Mark all messages for a house as read for the current user
+    """
+    try:
+        house = House.objects.get(id=house_id)
+        user = request.user
+
+        # Mark messages as read where user is the receiver
+        Message.objects.filter(
+            house=house,
+            receiver=user,
+            is_read=False
+        ).update(is_read=True)
+
+        return Response({'message': 'Messages marked as read'}, status=status.HTTP_200_OK)
+
     except House.DoesNotExist:
         return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
 

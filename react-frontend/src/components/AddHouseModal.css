@@ -588,3 +588,18 @@
     padding: 2rem 1rem;
   }
 }
+
+/* Read-only field styling */
+.readonly-field {
+  background-color: var(--bg-disabled, #f8f9fa) !important;
+  color: var(--text-disabled, #6c757d) !important;
+  cursor: not-allowed !important;
+  border: 1px solid var(--border-disabled, #dee2e6) !important;
+  opacity: 0.7;
+}
+
+.readonly-field:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--border-disabled, #dee2e6) !important;
+}

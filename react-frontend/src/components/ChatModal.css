@@ -154,7 +154,7 @@
 .message {
   display: flex;
   gap: 12px;
-  max-width: 80%;
+  max-width: 90%;
 }
 
 .message.sent {
@@ -323,7 +323,7 @@
   }
 
   .message {
-    max-width: 85%;
+    max-width: 90%;
   }
 
   .message.sent {

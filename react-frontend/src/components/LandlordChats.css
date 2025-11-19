@@ -1,9 +1,11 @@
 
-/* Landlord Chats - Purple, Black, White Theme */
+
 .landlord-chats {
   padding: 20px;
   background: #f8f9fa;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .landlord-chats.dark {
@@ -13,7 +15,7 @@
 
 .chats-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .chats-header h2 {
@@ -34,28 +36,546 @@
   margin: 0;
 }
 
-.delete-all-btn {
-  background: crimson;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.delete-all-btn:hover {
-  background: #b22222;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(220, 20, 60, 0.3);
-}
-
 .landlord-chats.dark .chats-header p {
   color: #9ca3af;
+}
+
+/* Chat Container - Main Layout */
+.chat-container {
+  display: flex;
+  height: calc(100vh - 140px);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  flex: 1;
+}
+
+.landlord-chats.dark .chat-container {
+  background: #2a2a2a;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Conversations Panel - Left Side */
+.conversations-panel {
+  width: 350px;
+  background: #f8f9fa;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+}
+
+.landlord-chats.dark .conversations-panel {
+  background: #1e1e1e;
+  border-right-color: #404040;
+}
+
+.conversations-header {
+  padding: 16px 20px;
+  background: #f0f2f5;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  color: #41525d;
+}
+
+.landlord-chats.dark .conversations-header {
+  background: #2a2a2a;
+  border-bottom-color: #404040;
+  color: #e9edef;
+}
+
+.conversations-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Conversation Item */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f2f5;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.conversation-item:hover {
+  background: #f5f5f5;
+}
+
+.landlord-chats.dark .conversation-item:hover {
+  background: #2a2a2a;
+}
+
+.conversation-item.active {
+  background: #e3f2fd;
+}
+
+.landlord-chats.dark .conversation-item.active {
+  background: #2a2a2a;
+}
+
+.conversation-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.conversation-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tenant-name {
+  font-weight: 600;
+  color: #111b21;
+  font-size: 16px;
+}
+
+.landlord-chats.dark .tenant-name {
+  color: #e9edef;
+}
+
+.timestamp {
+  color: #667781;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.house-title {
+  color: #667781;
+  font-size: 13px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.last-message {
+  color: #667781;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unread-badge {
+  background: #8b5cf6;
+  color: white;
+  border-radius: 50%;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* Chat Panel - Right Side */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+.landlord-chats.dark .chat-panel {
+  background: #1a1a1a;
+}
+
+/* Chat Header */
+.chat-header {
+  background: #f0f2f5;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landlord-chats.dark .chat-header {
+  background: #202c33;
+  border-bottom-color: #2a3942;
+}
+
+.back-button {
+  display: none;
+  background: none;
+  border: none;
+  color: #667781;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.back-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.chat-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.chat-info {
+  flex: 1;
+}
+
+.chat-info h4 {
+  margin: 0 0 4px 0;
+  color: #111b21;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.landlord-chats.dark .chat-info h4 {
+  color: #e9edef;
+}
+
+.chat-info p {
+  margin: 0;
+  color: #667781;
+  font-size: 13px;
+}
+
+/* Messages Container */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text fill="%23f0f0f0" font-size="20" y="50%">💬</text></svg>') repeat;
+  background-size: 50px 50px;
+}
+
+.landlord-chats.dark .messages-container {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text fill="%232a2a2a" font-size="20" y="50%">💬</text></svg>') repeat;
+  background-size: 50px 50px;
+}
+
+/* Message Styles */
+.message {
+  margin-bottom: 12px;
+  display: flex;
+}
+
+.message.sent {
+  justify-content: flex-end;
+}
+
+.message.received {
+  justify-content: flex-start;
+}
+
+.message-content {
+  max-width: 85%;
+  background: #e3f2fd;
+  padding: 8px 12px;
+  border-radius: 18px;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.message.sent .message-content {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  color: white;
+}
+
+.message.received .message-content {
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.landlord-chats.dark .message.received .message-content {
+  background: #2a2a2a;
+  border-color: #404040;
+  color: white;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #667781;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.message.sent .message-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Message Input */
+.message-input {
+  background: #f0f2f5;
+  padding: 12px 20px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landlord-chats.dark .message-input {
+  background: #202c33;
+  border-top-color: #2a3942;
+  padding: 10px 16px;
+}
+
+.message-field {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  outline: none;
+  font-size: 14px;
+  background: white;
+  resize: none;
+}
+
+.landlord-chats.dark .message-field {
+  background: #2a2a2a;
+  border-color: #404040;
+  color: white;
+}
+
+.message-field:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+}
+
+.send-button {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.send-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.send-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+/* No Chat Selected */
+.no-chat-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #667781;
+  text-align: center;
+}
+
+.no-chat-selected h3 {
+  margin: 0 0 8px 0;
+  color: #41525d;
+  font-size: 20px;
+}
+
+.landlord-chats.dark .no-chat-selected h3 {
+  color: #e9edef;
+}
+
+.no-chat-selected p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #667781;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* No Conversations */
+.no-conversations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #667781;
+  text-align: center;
+}
+
+.no-conversations h4 {
+  margin: 0 0 8px 0;
+  color: #41525d;
+  font-size: 18px;
+}
+
+.landlord-chats.dark .no-conversations h4 {
+  color: #e9edef;
+}
+
+.no-conversations p {
+  margin: 0;
+  font-size: 14px;
+  max-width: 300px;
+}
+
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+  .landlord-chats {
+    padding: 10px;
+  }
+
+  .chat-container {
+    height: calc(100vh - 120px);
+  }
+
+  .conversations-panel {
+    width: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 10;
+    transition: transform 0.3s ease;
+  }
+
+  .conversations-panel.mobile-hidden {
+    transform: translateX(-100%);
+  }
+
+  .chat-panel {
+    width: 100%;
+  }
+
+  .chat-panel.mobile-visible {
+    display: flex;
+  }
+
+  .back-button.mobile-only {
+    display: flex;
+  }
+
+  .chat-header {
+    padding: 12px 16px;
+  }
+
+  .chat-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .chat-info h4 {
+    font-size: 14px;
+  }
+
+  .messages-container {
+    padding: 16px;
+  }
+
+  .message-content {
+    max-width: 85%;
+    font-size: 14px;
+  }
+
+  .message-input {
+    padding: 8px 16px;
+  }
+
+  .message-field {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+@media (max-width: 480px) {
+  .landlord-chats {
+    padding: 5px;
+  }
+
+  .conversations-panel {
+    width: 100vw;
+  }
+
+  .conversation-item {
+    padding: 12px 16px;
+  }
+
+  .conversation-avatar {
+    width: 45px;
+    height: 45px;
+    font-size: 16px;
+  }
+
+  .tenant-name {
+    font-size: 15px;
+  }
+
+  .timestamp {
+    font-size: 11px;
+  }
+
+  .house-title {
+    font-size: 12px;
+  }
+
+  .last-message {
+    font-size: 13px;
+  }
 }
 
 .tenant-chats-grid {
@@ -515,7 +1035,7 @@
 
 /* Message Cluster */
 .message-cluster {
-  max-width: 70%;
+  max-width: 75%;
   min-width: 120px;
 }
 
@@ -979,7 +1499,7 @@
   }
 
   .message-cluster {
-    max-width: 80%;
+    max-width: 85%;
     min-width: 100px;
   }
 

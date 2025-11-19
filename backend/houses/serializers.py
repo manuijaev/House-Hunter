@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import House
+from .models import House, Message
 
 class HouseSerializer(serializers.ModelSerializer):
     # Writable aliases for frontend field names
@@ -9,17 +9,19 @@ class HouseSerializer(serializers.ModelSerializer):
     contactEmail = serializers.EmailField(source='contact_email', required=False, allow_blank=True)
     landlordName = serializers.CharField(source='landlord_name', required=False, allow_blank=True)
     displayName = serializers.CharField(source='landlord_name', required=False, allow_blank=True)
+    landlordUsername = serializers.CharField(source='landlord.username', required=False, allow_blank=True)
+    landlordId = serializers.IntegerField(source='landlord.id', required=False)
     availableDate = serializers.DateField(source='available_date', required=False, allow_null=True)
     pendingReason = serializers.CharField(source='pending_reason', required=False, allow_blank=True)
-    landlordId = serializers.CharField(source='landlord_uid', required=False, allow_blank=True)
+    landlordUid = serializers.CharField(source='landlord_uid', required=False, allow_blank=True)
     landlordEmail = serializers.EmailField(source='landlord_email', required=False, allow_blank=True)
 
     class Meta:
         model = House
         fields = [
-            'id', 'title', 'description', 'location', 'size',
+            'id', 'title', 'description', 'location', 'exact_location', 'size',
             'monthlyRent', 'deposit', 'availableDate',
-            'images', 'amenities', 'landlord', 'landlordName', 'displayName', 'landlordId', 'landlordEmail',
+            'images', 'amenities', 'landlord', 'landlordName', 'displayName', 'landlordUsername', 'landlordId', 'landlordUid', 'landlordEmail',
             'isVacant', 'approval_status', 'pendingReason', 'created_at', 'updated_at',
             'contactPhone', 'contactEmail'
         ]
@@ -35,6 +37,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'title': instance.title,
             'description': instance.description,
             'location': instance.location,
+            'exact_location': instance.exact_location,
             'size': instance.size,
             'monthly_rent': instance.monthly_rent,
             'deposit': instance.deposit,
@@ -119,6 +122,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'title': ['title'],
             'description': ['description'],
             'location': ['location'],
+            'exact_location': ['exact_location', 'location'],  # Allow location to set exact_location
             'size': ['size'],
         }
 
@@ -142,4 +146,18 @@ class HouseSerializer(serializers.ModelSerializer):
             validated_data['landlord_name'] = 'Landlord'
 
         return super().create(validated_data)
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.username', read_only=True)
+    receiver_name = serializers.CharField(source='receiver.username', read_only=True)
+    house_title = serializers.CharField(source='house.title', read_only=True)
+
+    class Meta:
+        model = Message
+        fields = [
+            'id', 'sender', 'sender_name', 'receiver', 'receiver_name',
+            'house', 'house_title', 'text', 'timestamp', 'is_read'
+        ]
+        read_only_fields = ['id', 'timestamp']
 

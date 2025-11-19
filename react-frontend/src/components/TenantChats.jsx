@@ -1,18 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  collection,
-  query,
-  onSnapshot,
-  where,
-  deleteDoc,
-  doc,
-  getDoc,
-  addDoc
-} from 'firebase/firestore';
-import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { djangoAPI } from '../services/djangoAPI';
-import { listenToAllHouseStatus } from '../utils/houseStatusListener';
 import {
   Search,
   LogOut,
@@ -129,43 +117,10 @@ function TenantPage() {
 
     fetchHouses();
 
-    let unsubscribe = null;
-    try {
-      unsubscribe = listenToAllHouseStatus((statusUpdates) => {
-        setHouses(prevHouses => {
-          if (!Array.isArray(prevHouses) || prevHouses.length === 0) return prevHouses;
-          
-          const updatedHouses = prevHouses.map(house => {
-            if (!house) return house;
-            
-            const statusUpdate = statusUpdates[String(house.id)];
-            if (statusUpdate) {
-              return {
-                ...house,
-                approval_status: statusUpdate.approval_status || house.approval_status,
-                isVacant: statusUpdate.isVacant !== undefined ? statusUpdate.isVacant : house.isVacant
-              };
-            }
-            return house;
-          });
+    // Set up periodic refresh for house status updates (simplified approach)
+    const interval = setInterval(fetchHouses, 30000); // Refresh every 30 seconds
 
-          const filtered = updatedHouses.filter(house => 
-            house && house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
-          );
-
-          applyFiltersAndSort(filtered);
-          return updatedHouses;
-        });
-      });
-    } catch (err) {
-      console.error('Failed to set up house status listener:', err);
-      const interval = setInterval(fetchHouses, 10000);
-      return () => clearInterval(interval);
-    }
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    return () => clearInterval(interval);
   }, []);
 
   // Load user preferences and favorites
@@ -252,109 +207,54 @@ function TenantPage() {
     const fetchTenantLocation = async () => {
       if (currentUser) {
         try {
-          const userDocRef = doc(db, 'users', currentUser.id?.toString());
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setTenantLocation(userData.location || 'Nairobi');
-          } else {
-            setTenantLocation('Nairobi');
-          }
-        } catch (error) {
+          // For now, use a default location since we don't have location in Django user model
+          // This can be enhanced later by adding location to the Django User model
           const savedLocation = localStorage.getItem(`tenant_location_${currentUser.id}`);
           setTenantLocation(savedLocation || 'Nairobi');
+        } catch (error) {
+          setTenantLocation('Nairobi');
         }
       }
     };
     fetchTenantLocation();
   }, [currentUser]);
 
-  // Message tracking
+  // Message tracking - simplified for now, will be enhanced with WebSockets later
   useEffect(() => {
     if (!currentUser || houses.length === 0) return;
 
-    const q1 = query(collection(db, 'messages'), where('receiverId', '==', currentUser.id?.toString()));
-    const q2 = query(collection(db, 'messages'), where('receiverEmail', '==', currentUser.email));
-
-    const processedKey = `tenant_processed_messages_${currentUser.id}`;
-    const getProcessedIds = () => {
+    const fetchMessageCounts = async () => {
       try {
-        const stored = localStorage.getItem(processedKey);
-        return stored ? new Set(JSON.parse(stored)) : new Set();
-      } catch { return new Set(); }
-    };
-
-    const saveProcessedIds = (ids) => {
-      try {
-        const idsArray = Array.from(ids).slice(-1000);
-        localStorage.setItem(processedKey, JSON.stringify(idsArray));
+        // For now, we'll fetch message counts periodically
+        // In the future, this could be replaced with WebSocket real-time updates
+        const counts = {};
+        for (const house of houses) {
+          try {
+            const response = await djangoAPI.getHouseMessages(house.id);
+            const messages = response.messages || [];
+            const unreadCount = messages.filter(msg =>
+              msg.sender !== currentUser.id && !msg.is_read
+            ).length;
+            if (unreadCount > 0) {
+              counts[house.id] = unreadCount;
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch messages for house ${house.id}:`, error);
+          }
+        }
+        setHouseMessageCounts(counts);
       } catch (error) {
-        console.warn('Failed to save processed message IDs:', error);
+        console.error('Error fetching message counts:', error);
       }
     };
 
-    let processedMessageIds = getProcessedIds();
-    let previousMessages = [];
-    let allMessages = [];
+    // Fetch initially
+    fetchMessageCounts();
 
-    const processMessages = () => {
-      const newMessages = allMessages.filter(msg => {
-        const houseId = msg.houseId;
-        const lastReadKey = `tenant_last_read_${currentUser.id}_${houseId}`;
-        const lastReadTimestamp = localStorage.getItem(lastReadKey);
-        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
-        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        const isNew = msgTime > lastReadTime;
-        const isNotPrevious = !previousMessages.some(prevMsg => prevMsg.id === msg.id);
-        const notAlreadyShown = !processedMessageIds.has(msg.id);
-        const isFromLandlord = msg.senderId !== currentUser.id?.toString();
-        return isNew && isNotPrevious && notAlreadyShown && isFromLandlord;
-      });
+    // Set up periodic fetching (every 30 seconds)
+    const interval = setInterval(fetchMessageCounts, 30000);
 
-      newMessages.forEach(msg => {
-        const landlordEmail = msg.senderEmail || 'Landlord';
-        toast.success(`New message from ${landlordEmail}: ${msg.text}`, { duration: 5000 });
-        processedMessageIds.add(msg.id);
-      });
-
-      if (newMessages.length > 0) saveProcessedIds(processedMessageIds);
-      previousMessages = [...allMessages];
-
-      const counts = {};
-      allMessages.forEach(msg => {
-        const houseId = msg.houseId;
-        if (!counts[houseId]) counts[houseId] = 0;
-        const lastReadKey = `tenant_last_read_${currentUser.id}_${houseId}`;
-        const lastReadTimestamp = localStorage.getItem(lastReadKey);
-        const lastReadTime = lastReadTimestamp ? new Date(lastReadTimestamp) : new Date(0);
-        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        if (msgTime > lastReadTime && msg.senderId !== currentUser.id?.toString()) {
-          counts[houseId] += 1;
-        }
-      });
-
-      setHouseMessageCounts(counts);
-    };
-
-    const unsubscribe1 = onSnapshot(q1, (snapshot) => {
-      const messages1 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      allMessages = [...messages1];
-      processMessages();
-    });
-
-    const unsubscribe2 = onSnapshot(q2, (snapshot) => {
-      const messages2 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const existingIds = new Set(allMessages.map(m => m.id));
-      messages2.forEach(msg => {
-        if (!existingIds.has(msg.id)) allMessages.push(msg);
-      });
-      processMessages();
-    });
-
-    return () => {
-      unsubscribe1();
-      unsubscribe2();
-    };
+    return () => clearInterval(interval);
   }, [currentUser, houses]);
 
   // Toggle favorite
@@ -448,7 +348,7 @@ function TenantPage() {
         localStorage.setItem(`paid_houses_${currentUser.id}`, JSON.stringify(paidHouses));
         toast.success(`Payment successful! You can now chat with the landlord for ${house.title}`);
       } else {
-        toast.info('You have already paid for this house');
+        toast.success('You have already paid for this house');
       }
     }
   };

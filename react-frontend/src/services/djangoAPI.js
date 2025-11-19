@@ -110,9 +110,10 @@ export const djangoAPI = {
   },
 
   updateHouse: async (houseId, updates) => {
-    // For partial updates (like vacancy toggle), only send the fields being updated
+    // For partial updates, send all provided fields (including empty strings)
     const djangoUpdates = {};
 
+    // Always include basic fields if provided
     if (updates.title !== undefined) djangoUpdates.title = updates.title;
     if (updates.description !== undefined) djangoUpdates.description = updates.description;
     if (updates.location !== undefined) djangoUpdates.location = updates.location;
@@ -249,5 +250,28 @@ export const djangoAPI = {
 
   deleteOwnAccount: async () => {
     return await makeApiCall('/auth/delete-account/', { method: 'DELETE' });
+  },
+
+  // =============================
+  // MESSAGE ENDPOINTS
+  // =============================
+
+  getMessages: async () => {
+    return await makeApiCall('/messages/');
+  },
+
+  getHouseMessages: async (houseId) => {
+    return await makeApiCall(`/houses/${houseId}/messages/`);
+  },
+
+  sendMessage: async (messageData) => {
+    return await makeApiCall('/messages/', {
+      method: 'POST',
+      body: JSON.stringify(messageData),
+    });
+  },
+
+  markMessagesRead: async (houseId) => {
+    return await makeApiCall(`/houses/${houseId}/messages/mark-read/`, { method: 'POST' });
   },
 };

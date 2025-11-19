@@ -133,9 +133,9 @@ function HouseCard({
 
   // Check payment status
   useEffect(() => {
-    if (userType === 'tenant' && currentUser?.uid && house?.id) {
+    if (userType === 'tenant' && currentUser?.id && house?.id) {
       try {
-        const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.uid}`) || '[]');
+        const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.id}`) || '[]');
         setIsPaid(paidHouses.includes(String(house.id)));
       } catch (error) {
         console.error('Error checking paid houses:', error);
@@ -160,16 +160,18 @@ function HouseCard({
 
   // Helper function to check if house was posted within 24 hours
   const isHouseNew = useCallback((house) => {
-    if (!house?.created_at) return false;
-    
+    // Use updated_at for when the house became visible (approved), fallback to created_at
+    const dateToCheck = house?.updated_at || house?.created_at;
+    if (!dateToCheck) return false;
+
     try {
-      const createdAt = new Date(house.created_at);
+      const postDate = new Date(dateToCheck);
       const now = new Date();
       const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-      
-      return createdAt > twentyFourHoursAgo;
+
+      return postDate > twentyFourHoursAgo;
     } catch (error) {
-      console.error('Error parsing house creation date:', error);
+      console.error('Error parsing house date:', error);
       return false;
     }
   }, []);
@@ -189,7 +191,7 @@ function HouseCard({
       monthlyRent: house.monthlyRent || house.monthly_rent || 0,
       deposit: house.deposit || 0,
       availableDate: house.availableDate || house.available_date || 'Immediately',
-      landlordName: house.landlordName || house.landlord_name || 'Unknown',
+      landlordName: house.landlordUsername || house.landlordName || house.landlord_name || 'Unknown',
       contactPhone: house.contactPhone || house.contact_phone || '',
       contactEmail: house.contactEmail || house.contact_email || '',
       images: house.images || [],
@@ -199,6 +201,7 @@ function HouseCard({
       popularity: house.popularity || Math.floor(Math.random() * 100) + 1,
       views: house.views || Math.floor(Math.random() * 1000) + 100,
       created_at: house.created_at || house.createdAt || null,
+      updated_at: house.updated_at || house.updatedAt || null,
       approval_status: house.approval_status || 'pending'
     };
   }, [house]);
@@ -255,7 +258,7 @@ function HouseCard({
     if (!currentUser) {
       // Redirect to login with favorite house ID
       navigate(`/login?favoriteHouseId=${houseData?.id}`);
-      toast.info('Please sign in to save favorites');
+      toast.success('Please sign in to save favorites');
       return;
     }
     if (onFavorite && houseData?.id) {

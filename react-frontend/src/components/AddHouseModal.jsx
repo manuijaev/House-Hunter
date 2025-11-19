@@ -41,7 +41,7 @@ const AMENITIES = [
   { id: 'washing', label: 'Washing Machine', icon: Zap, category: 'utilities' }, // Using Zap as alternative
 ];
 
-function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
+function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -65,24 +65,57 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
 
   // Initialize form data
   useEffect(() => {
-    const newFormData = {
-      title: house?.title || '',
-      description: house?.description || '',
-      location: house?.location || '',
-      size: house?.size || '',
-      monthlyRent: house?.monthly_rent || house?.monthlyRent || '',
-      deposit: house?.deposit || '',
-      availableDate: house?.available_date || house?.availableDate || '',
-      contactPhone: house?.contact_phone || house?.contactPhone || '',
-      contactEmail: house?.contact_email || house?.contactEmail || '',
-      displayName: house?.landlord_name || house?.displayName || '',
-      images: house?.images || [],
-      amenities: house?.amenities || []
-    };
-    
-    setFormData(newFormData);
-    setSelectedAmenities(house?.amenities || []);
-  }, [house]);
+    if (house) {
+      // Format date for input field (YYYY-MM-DD)
+      let formattedDate = '';
+      if (house.available_date || house.availableDate) {
+        const date = new Date(house.available_date || house.availableDate);
+        if (!isNaN(date.getTime())) {
+          formattedDate = date.toISOString().split('T')[0];
+        }
+      }
+
+      // Convert Django images array to form format
+      const processedImages = Array.isArray(house.images)
+        ? house.images.map(img => typeof img === 'string' ? { url: img, id: img } : img)
+        : [];
+
+      const newFormData = {
+        title: house.title || '',
+        description: house.description || '',
+        location: house.location || house.exact_location || '',
+        size: house.size || '',
+        monthlyRent: house.monthly_rent || house.monthlyRent || '',
+        deposit: house.deposit || '',
+        availableDate: formattedDate,
+        contactPhone: house.contact_phone || house.contactPhone || '',
+        contactEmail: house.contact_email || house.contactEmail || '',
+        displayName: house.landlord_name || house.displayName || '',
+        images: processedImages,
+        amenities: house.amenities || []
+      };
+
+      setFormData(newFormData);
+      setSelectedAmenities(house.amenities || []);
+    } else {
+      // Reset form for new house - auto-populate with current user info
+      setFormData({
+        title: '',
+        description: '',
+        location: '',
+        size: '',
+        monthlyRent: '',
+        deposit: '',
+        availableDate: '',
+        contactPhone: '',
+        contactEmail: currentUser?.email || '',
+        displayName: currentUser?.username || '',
+        images: [],
+        amenities: []
+      });
+      setSelectedAmenities([]);
+    }
+  }, [house, currentUser]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -303,10 +336,11 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
                 <input
                   type="text"
                   name="displayName"
-                  placeholder="Your Display Name"
+                  placeholder="Your Username (Auto-filled)"
                   value={formData.displayName}
-                  onChange={handleInputChange}
-                  required
+                  readOnly
+                  className="readonly-field"
+                  title="This is automatically set to your username"
                 />
               </div>
 
@@ -468,10 +502,11 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode }) {
                 <input
                   type="email"
                   name="contactEmail"
-                  placeholder="Email Address"
+                  placeholder="Your Email (Auto-filled)"
                   value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  required
+                  readOnly
+                  className="readonly-field"
+                  title="This is automatically set to your email"
                 />
               </div>
             </div>

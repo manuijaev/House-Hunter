@@ -1,19 +1,7 @@
 // src/components/ChatModal.jsx
-import React, { useEffect, useState } from "react";
-import {
-  addDoc,
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  deleteDoc,
-  getDocs,
-  getDoc,
-  serverTimestamp,
-  where,
-} from "firebase/firestore";
-import { db } from "../firebase/config";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { djangoAPI } from "../services/djangoAPI";
 import { X, Send } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import "./ChatModal.css";
@@ -22,151 +10,151 @@ function ChatModal({ house, onClose, isDarkMode }) {
   const { currentUser } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const websocketRef = useRef(null);
 
+  // Load initial messages from Django API
   useEffect(() => {
     if (!house || !currentUser) return;
 
-    // Mark messages as read when chat modal opens
-    const lastReadKey = `tenant_last_read_${currentUser.uid}_${house.id}`;
-    localStorage.setItem(lastReadKey, new Date().toISOString());
+    const loadMessages = async () => {
+      try {
+        setLoading(true);
+        const response = await djangoAPI.getHouseMessages(house.id);
+        setMessages(response.messages || []);
 
-    // Query without orderBy first to avoid index requirement, then sort manually
-    const q = query(
-      collection(db, "messages"),
-      where("houseId", "==", house.id)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Only messages between this tenant and this landlord (by email)
-      const landlordEmail = house.contactEmail || house.landlordEmail;
-      const filtered = msgs.filter(
-        (m) =>
-          (m.senderId === currentUser.uid &&
-            (m.receiverEmail === landlordEmail || m.receiverId === landlordEmail)) ||
-          (m.senderEmail === landlordEmail &&
-            m.receiverId === currentUser.uid)
-      );
-
-      // Update last read time when messages are loaded/viewed
-      if (filtered.length > 0) {
-        const latestMessage = filtered[filtered.length - 1];
-        const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
-        localStorage.setItem(lastReadKey, latestTime.toISOString());
-        
-        // Mark all current messages in this conversation as processed to prevent toasts on refresh
-        const processedKey = `tenant_processed_messages_${currentUser.uid}`;
-        try {
-          const stored = localStorage.getItem(processedKey);
-          const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
-          filtered.forEach(msg => {
-            if (msg.senderId !== currentUser.uid) {
-              processedIds.add(msg.id);
-            }
-          });
-          const idsArray = Array.from(processedIds).slice(-1000);
-          localStorage.setItem(processedKey, JSON.stringify(idsArray));
-        } catch (error) {
-          console.warn('Failed to update processed message IDs:', error);
-        }
+        // Mark messages as read
+        await djangoAPI.markMessagesRead(house.id);
+      } catch (error) {
+        console.error('Error loading messages:', error);
+        toast.error('Failed to load messages');
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setMessages(prevMessages => {
-        const optimisticMessages = prevMessages.filter(msg => msg.id.startsWith('temp-'));
-        const allMessages = [...filtered];
+    loadMessages();
+  }, [house, currentUser]);
 
-        // Keep optimistic messages that don't have real counterparts yet
-        optimisticMessages.forEach(optMsg => {
-          const exists = filtered.some(realMsg =>
-            realMsg.text === optMsg.text &&
-            realMsg.senderId === optMsg.senderId &&
-            Math.abs((realMsg.timestamp?.toDate?.() || realMsg.timestamp) - (optMsg.timestamp?.toDate?.() || optMsg.timestamp)) < 5000 // Within 5 seconds
-          );
-          if (!exists) {
-            allMessages.push(optMsg);
+  // WebSocket connection for real-time messaging
+  useEffect(() => {
+    if (!house || !currentUser) return;
+
+    const connectWebSocket = () => {
+      const token = localStorage.getItem('access_token');
+      const wsUrl = `ws://localhost:8000/ws/chat/${house.id}/?token=${token}`;
+      websocketRef.current = new WebSocket(wsUrl);
+
+      websocketRef.current.onopen = () => {
+        console.log('WebSocket connected for house:', house.id);
+      };
+
+      websocketRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setMessages(prevMessages => {
+          // Check if message already exists (avoid duplicates)
+          const exists = prevMessages.some(msg => msg.id === data.message_id);
+          if (exists) {
+            // If it exists but was optimistic, update it with real data
+            return prevMessages.map(msg =>
+              msg.id === data.message_id
+                ? {
+                    id: data.message_id,
+                    text: data.message,
+                    sender: data.sender_id,
+                    sender_name: data.sender_id === currentUser.id ? 'You' : 'Landlord',
+                    receiver: data.receiver_id,
+                    timestamp: new Date(data.timestamp),
+                    is_read: false
+                  }
+                : msg
+            );
           }
+
+          // Remove any optimistic messages with similar content from same sender
+          const filteredMessages = prevMessages.filter(msg =>
+            !(msg.isSending && msg.sender === data.sender_id && msg.text === data.message)
+          );
+
+          const newMessage = {
+            id: data.message_id,
+            text: data.message,
+            sender: data.sender_id,
+            sender_name: data.sender_id === currentUser.id ? 'You' : 'Landlord',
+            receiver: data.receiver_id,
+            timestamp: new Date(data.timestamp),
+            is_read: false
+          };
+
+          return [...filteredMessages, newMessage].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         });
+      };
 
+      websocketRef.current.onclose = () => {
+        console.log('WebSocket disconnected');
+        // Attempt to reconnect after a delay
+        setTimeout(connectWebSocket, 3000);
+      };
 
-        return allMessages.sort((a, b) => {
-          const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;
-          const bTime = b.timestamp?.toDate?.() || b.timestamp || 0;
-          return aTime - bTime;
-        });
-      });
-    });
+      websocketRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    };
 
-    return () => unsubscribe();
+    connectWebSocket();
+
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+      }
+    };
   }, [house, currentUser]);
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
 
     const messageText = newMessage.trim();
-    const landlordEmail = house.contactEmail || house.landlordEmail;
-    
-    if (!landlordEmail) {
-      toast.error('Landlord email not found');
-      return;
-    }
+    const tempMessageId = `temp_${Date.now()}`; // Temporary ID for optimistic update
 
-    // Get landlord UID from email by querying users collection
-    let landlordUid = null;
-    try {
-      const usersQuery = query(
-        collection(db, 'users'),
-        where('email', '==', landlordEmail)
-      );
-      const usersSnapshot = await getDocs(usersQuery);
-      if (!usersSnapshot.empty) {
-        landlordUid = usersSnapshot.docs[0].id;
-      }
-    } catch (error) {
-      console.warn('Could not find landlord UID from email:', error);
-    }
-
-    // Optimistically add message to local state
+    // Optimistically add message to UI immediately
     const optimisticMessage = {
-      id: `temp-${Date.now()}`,
+      id: tempMessageId,
       text: messageText,
-      houseId: house.id,
-      houseTitle: house.title,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || "Tenant",
-      senderEmail: currentUser.email,
-      receiverId: landlordUid || landlordEmail, // Use email as fallback
-      receiverEmail: landlordEmail,
-      receiverName: house.landlordName || "Landlord",
-      timestamp: { toDate: () => new Date() }, // Temporary timestamp
+      sender: currentUser.id,
+      sender_name: 'You',
+      receiver: house.landlordId,
+      timestamp: new Date(),
+      is_read: false,
+      isSending: true // Flag to show sending state
     };
 
-    setMessages(prev => [...prev, optimisticMessage]);
-    setNewMessage("");
+    setMessages(prevMessages => [...prevMessages, optimisticMessage]);
+
+    // Send message via WebSocket
+    const messageData = {
+      message: messageText,
+      sender_id: currentUser.id,
+      receiver_id: house.landlordId, // Django user ID of landlord
+    };
 
     try {
-      await addDoc(collection(db, "messages"), {
-        text: messageText,
-        houseId: house.id,
-        houseTitle: house.title,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Tenant",
-        senderEmail: currentUser.email,
-        receiverId: landlordUid || landlordEmail,
-        receiverEmail: landlordEmail,
-        receiverName: house.landlordName || "Landlord",
-        timestamp: serverTimestamp(),
-      });
-      toast.success('Message sent successfully');
+      websocketRef.current.send(JSON.stringify(messageData));
+      setNewMessage("");
+
+      // Remove sending flag after a short delay (will be replaced by real message from WebSocket)
+      setTimeout(() => {
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === tempMessageId ? { ...msg, isSending: false } : msg
+          )
+        );
+      }, 1000);
+
     } catch (error) {
       console.error('Error sending message:', error);
       // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      setNewMessage(messageText);
+      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempMessageId));
       toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
     }
   };
@@ -176,7 +164,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
 
     if (window.confirm('Are you sure you want to clear this conversation? Messages will be cleared from your view only.')) {
       setMessages([]);
-      alert('Conversation cleared from your view');
+      toast.success('Conversation cleared from your view');
     }
   };
 
@@ -212,7 +200,11 @@ function ChatModal({ house, onClose, isDarkMode }) {
         </div>
 
         <div className="chat-messages">
-          {messages.length === 0 ? (
+          {loading ? (
+            <div className="no-messages">
+              <h4>Loading messages...</h4>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="no-messages">
               <h4>No messages yet</h4>
               <p>Start a conversation with the landlord</p>
@@ -222,19 +214,20 @@ function ChatModal({ house, onClose, isDarkMode }) {
               <div
                 key={msg.id}
                 className={`message ${
-                  msg.senderId === currentUser.uid ? "sent" : "received"
-                }`}
+                  msg.sender === currentUser.id ? "sent" : "received"
+                } ${msg.isSending ? "sending" : ""}`}
               >
                 <div className="message-avatar">
-                  {msg.senderName?.charAt(0).toUpperCase() || "U"}
+                  {msg.sender_name?.charAt(0).toUpperCase() || "U"}
                 </div>
                 <div className="message-content">
                   <p className="message-text">{msg.text}</p>
                   <span className="message-time">
-                    {msg.timestamp?.toDate().toLocaleTimeString([], {
+                    {new Date(msg.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
+                    {msg.isSending && <span className="sending-indicator"> • Sending...</span>}
                   </span>
                 </div>
               </div>

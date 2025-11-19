@@ -1,674 +1,365 @@
 import React, { useEffect, useState, useRef } from "react";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  deleteDoc,
-  getDocs,
-  getDoc,
-  doc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "../firebase/config";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from 'react-hot-toast';
+import { djangoAPI } from "../services/djangoAPI";
+import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
 import './LandlordChats.css';
 
 function LandlordChats({ isDarkMode }) {
   const { currentUser } = useAuth();
   const [conversations, setConversations] = useState([]);
-  const [messageCounts, setMessageCounts] = useState({});
-  const [selectedKey, setSelectedKey] = useState(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const [totalUnread, setTotalUnread] = useState(0);
-  const [openedKeys, setOpenedKeys] = useState(() => new Set());
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const websocketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const maskEmail = (email) => {
-    if (!email || typeof email !== 'string') return 'Tenant';
-    const [name, domain] = email.split('@');
-    if (!domain) return email;
-    const short = name.length > 6 ? name.slice(0, 6) + '•••' : name;
-    return `${short}@${domain}`;
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const truncate = (text, len = 60) => {
-    if (!text) return '';
-    return text.length > len ? text.slice(0, len) + '…' : text;
-  };
-
-  const timeStr = (ts) => {
-    if (!ts) return '';
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    if (isNaN(d)) return '';
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  // Fetch landlord's conversations (by email or UID)
   useEffect(() => {
-    if (!currentUser) return;
+    scrollToBottom();
+  }, [messages]);
 
-    // Query messages where landlord is receiver (by UID or email)
-    const q1 = query(
-      collection(db, "messages"),
-      where("receiverId", "==", currentUser.uid)
-    );
-    
-    const q2 = query(
-      collection(db, "messages"),
-      where("receiverEmail", "==", currentUser.email)
-    );
+  // Fetch conversations
+  useEffect(() => {
+    const fetchConversations = async () => {
+      if (!currentUser?.id) return;
 
-    let unsubscribe1, unsubscribe2;
-    let allMessages = [];
-
-    const processMessages = () => {
-      // Group by tenant email + houseId and count messages
-      const grouped = {};
-      allMessages.forEach((msg) => {
-        // Only process messages from tenants (not landlord's own messages)
-        if (msg.senderId === currentUser.uid || msg.senderEmail === currentUser.email) {
-          return; // Skip landlord's own sent messages
-        }
-        
-        // Use tenant email as primary key, fallback to senderId
-        const tenantKey = msg.senderEmail || msg.senderId;
-        const key = `${tenantKey}_${msg.houseId}`;
-        
-        if (!grouped[key]) {
-          grouped[key] = {
-            houseId: msg.houseId,
-            houseTitle: msg.houseTitle || 'Unknown House',
-            houseSize: msg.houseSize || msg.size || '',
-            tenantId: msg.senderId,
-            tenantName: msg.senderName || "Tenant",
-            tenantEmail: msg.senderEmail || "Unknown",
-            lastMessage: msg.text,
-            lastTime: msg.timestamp,
-            messageCount: 0,
-            unreadCount: 0,
-          };
-        }
-        // Keep most recent message and time
-        const msgTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        const existingTime = grouped[key].lastTime?.toDate?.() || new Date(grouped[key].lastTime);
-        if (msgTime > existingTime) {
-          grouped[key].lastMessage = msg.text;
-          grouped[key].lastTime = msg.timestamp;
-        }
-        grouped[key].messageCount += 1;
-
-        // Unread count (compare to per-conversation last read)
-        try {
-          const lastReadKey = `landlord_last_read_${currentUser.uid}_${key}`;
-          const lastReadIso = localStorage.getItem(lastReadKey);
-          const lastRead = lastReadIso ? new Date(lastReadIso) : new Date(0);
-          const mTime = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-          if (mTime > lastRead) {
-            grouped[key].unreadCount += 1;
-          }
-        } catch {}
-      });
-
-      // Sort conversations by most recent message time
-      const sortedConversations = Object.values(grouped).sort((a, b) => {
-        const aTime = a.lastTime?.toDate?.() || new Date(a.lastTime);
-        const bTime = b.lastTime?.toDate?.() || new Date(b.lastTime);
-        return bTime - aTime; // Most recent first
-      });
-
-      setConversations(sortedConversations);
-      setMessageCounts(grouped);
-      // compute total unread across conversations
-      const unreadTotal = Object.values(grouped).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-      setTotalUnread(unreadTotal);
       try {
-        window.dispatchEvent(new CustomEvent('landlord:unread', { detail: { totalUnread: unreadTotal } }));
-      } catch {}
-    };
+        setLoading(true);
+        // Get all houses for this landlord
+        const houses = await djangoAPI.getLandlordHouses(currentUser.id.toString());
 
-    unsubscribe1 = onSnapshot(q1, (snapshot) => {
-      const msgs1 = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      allMessages = [...msgs1];
-      processMessages();
-    });
+        // For each house, get messages and group by tenant
+        const conversationsMap = new Map();
 
-    unsubscribe2 = onSnapshot(q2, (snapshot) => {
-      const msgs2 = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      // Merge with existing messages, avoiding duplicates
-      const existingIds = new Set(allMessages.map(m => m.id));
-      msgs2.forEach(msg => {
-        if (!existingIds.has(msg.id)) {
-          allMessages.push(msg);
+        for (const house of houses) {
+          try {
+            const response = await djangoAPI.getHouseMessages(house.id);
+            const houseMessages = response.messages || [];
+
+            // Group messages by the other user (not the landlord)
+            houseMessages.forEach(message => {
+              // Determine the other user (the one who is not the landlord)
+              const otherUserId = message.sender === currentUser.id ? message.receiver : message.sender;
+              const key = `${otherUserId}_${house.id}`;
+
+              if (!conversationsMap.has(key)) {
+                conversationsMap.set(key, {
+                  id: key,
+                  houseId: house.id,
+                  houseTitle: house.title || 'Unknown House',
+                  tenantId: otherUserId,
+                  tenantName: `Tenant ${otherUserId}`, // Could be enhanced to get user name
+                  lastMessage: message.text,
+                  lastTime: message.timestamp,
+                  messageCount: 0,
+                  unreadCount: 0,
+                  messages: []
+                });
+              }
+
+              const conversation = conversationsMap.get(key);
+              conversation.messages.push(message);
+              conversation.messageCount += 1;
+
+              // Update last message if this is more recent
+              const msgTime = new Date(message.timestamp);
+              const lastTime = new Date(conversation.lastTime);
+              if (msgTime > lastTime) {
+                conversation.lastMessage = message.text;
+                conversation.lastTime = message.timestamp;
+              }
+
+              // Check if message is unread (only if receiver is landlord)
+              if (message.receiver === currentUser.id && !message.is_read) {
+                conversation.unreadCount += 1;
+              }
+            });
+          } catch (error) {
+            console.warn(`Failed to fetch messages for house ${house.id}:`, error);
+          }
         }
-      });
-      processMessages();
-    });
 
-    return () => {
-      if (unsubscribe1) unsubscribe1();
-      if (unsubscribe2) unsubscribe2();
+        // Convert to array and sort by most recent
+        const conversationsArray = Array.from(conversationsMap.values()).sort((a, b) => {
+          return new Date(b.lastTime) - new Date(a.lastTime);
+        });
+
+        setConversations(conversationsArray);
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    fetchConversations();
+
+    // Refresh conversations every 30 seconds
+    const interval = setInterval(fetchConversations, 30000);
+    return () => clearInterval(interval);
   }, [currentUser]);
 
-  // Toggle conversation selection with dynamic side panel
-  const handleSelectConversation = async (key, convo) => {
-    if (selectedKey === key) {
-      // Close panel
-      setSelectedKey(null);
-      setSelectedConversation(null);
-      return;
+  // WebSocket connection for selected conversation
+  useEffect(() => {
+    if (!selectedConversation || !currentUser) return;
+
+    const connectWebSocket = () => {
+      const token = localStorage.getItem('access_token');
+      const wsUrl = `ws://localhost:8000/ws/chat/${selectedConversation.houseId}/?token=${token}`;
+
+      websocketRef.current = new WebSocket(wsUrl);
+
+      websocketRef.current.onopen = () => {
+        console.log('WebSocket connected for house:', selectedConversation.houseId);
+      };
+
+      websocketRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        // Only add message if it's for the current conversation and involves the current user
+        if ((data.sender_id === currentUser.id || data.receiver_id === currentUser.id) &&
+            (data.sender_id === selectedConversation.tenantId || data.receiver_id === selectedConversation.tenantId)) {
+          setMessages(prev => {
+            // Avoid duplicates
+            const exists = prev.some(msg => msg.id === data.message_id);
+            if (exists) return prev;
+
+            const newMessage = {
+              id: data.message_id,
+              text: data.message,
+              sender: data.sender_id,
+              receiver: data.receiver_id,
+              timestamp: data.timestamp,
+              is_read: false
+            };
+            return [...prev, newMessage].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+        }
+      };
+
+      websocketRef.current.onclose = () => {
+        console.log('WebSocket disconnected');
+        // Attempt to reconnect after a delay
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      websocketRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+      }
+    };
+  }, [selectedConversation, currentUser]);
+
+  // Load messages when conversation is selected
+  useEffect(() => {
+    if (selectedConversation) {
+      setMessages(selectedConversation.messages || []);
+      // Mark messages as read
+      djangoAPI.markMessagesRead(selectedConversation.houseId).catch(console.warn);
     }
+  }, [selectedConversation]);
 
-    setSelectedKey(key);
-    setSelectedConversation(convo);
-
-    // Mark as read ONLY locally (no message receipts stored)
-    try {
-      const lastReadKey = `landlord_last_read_${currentUser.uid}_${key}`;
-      localStorage.setItem(lastReadKey, new Date().toISOString());
-    } catch (e) {
-      // ignore
-    }
-
-    // Clear unread immediately for this card and remember it was opened
-    setMessageCounts(prev => {
-      const next = { ...prev };
-      if (next[key]) next[key] = { ...next[key], unreadCount: 0 };
-      return next;
-    });
-    setOpenedKeys(prev => new Set(prev).add(key));
+  const handleSelectConversation = (conversation) => {
+    setSelectedConversation(conversation);
+    setShowMobileChat(true);
   };
 
-  const handleDeleteAllConversations = async () => {
-    if (!window.confirm('Are you sure you want to delete all conversations? This action cannot be undone.')) return;
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedConversation || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
+
+    const messageData = {
+      message: newMessage.trim(),
+      sender_id: currentUser.id,
+      receiver_id: selectedConversation.tenantId,
+    };
 
     try {
-      // Delete messages where landlord is receiver (by UID or email)
-      const q1 = query(collection(db, "messages"), where("receiverId", "==", currentUser.uid));
-      const q2 = query(collection(db, "messages"), where("receiverEmail", "==", currentUser.email));
-      // Delete messages where landlord is sender (by UID or email)
-      const q3 = query(collection(db, "messages"), where("senderId", "==", currentUser.uid));
-      const q4 = query(collection(db, "messages"), where("senderEmail", "==", currentUser.email));
-
-      const [snapshot1, snapshot2, snapshot3, snapshot4] = await Promise.all([
-        getDocs(q1),
-        getDocs(q2),
-        getDocs(q3),
-        getDocs(q4)
-      ]);
-
-      // Collect all unique document refs to avoid duplicate deletions
-      const docRefs = new Set();
-      [snapshot1, snapshot2, snapshot3, snapshot4].forEach(snapshot => {
-        snapshot.docs.forEach(doc => docRefs.add(doc.ref));
-      });
-
-      const deletePromises = Array.from(docRefs).map(ref => deleteDoc(ref));
-      await Promise.all(deletePromises);
-      setConversations([]);
-      setMessageCounts({});
-      toast.success('All conversations deleted successfully');
+      websocketRef.current.send(JSON.stringify(messageData));
+      setNewMessage("");
     } catch (error) {
-      console.error('Error deleting conversations:', error);
-      toast.error('Failed to delete conversations: ' + (error.message || 'Unknown error'));
+      console.error('Error sending message:', error);
     }
   };
 
-  // Tenant Chat Container Component
-  const TenantChatContainer = ({ conversation, currentUser, isDarkMode }) => {
-    const [messages, setMessages] = useState([]);
-    const [localReplyingTo, setLocalReplyingTo] = useState(null);
-    const [localReplyMessage, setLocalReplyMessage] = useState("");
-    const [newMessageText, setNewMessageText] = useState("");
-    const [houseTitle, setHouseTitle] = useState(conversation.houseTitle);
-    const [houseSize, setHouseSize] = useState(conversation.houseSize || '');
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
 
-    // Fetch house title if unknown
-    useEffect(() => {
-      if (houseTitle !== 'Unknown House' && houseSize) return;
+    if (diff < 60000) return 'now'; // Less than 1 minute
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`; // Minutes
+    if (diff < 86400000) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); // Today
+    if (diff < 604800000) return date.toLocaleDateString([], { weekday: 'short' }); // This week
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' }); // Older
+  };
 
-      const fetchHouseTitle = async () => {
-        try {
-          const houseDoc = await getDoc(doc(db, 'houses', conversation.houseId));
-          if (houseDoc.exists()) {
-            const data = houseDoc.data();
-            setHouseTitle(data.title);
-            setHouseSize(data.size || '');
-          }
-        } catch (error) {
-          console.error('Error fetching house:', error);
-        }
-      };
-      fetchHouseTitle();
-    }, [houseTitle, houseSize, conversation.houseId]);
+  const truncateMessage = (text, maxLength = 50) => {
+    if (!text) return '';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
 
-    // Fetch messages for this specific conversation
-    useEffect(() => {
-      // Mark messages as read when viewing this conversation
-      const convKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
-      const lastReadKey = `landlord_last_read_${currentUser.uid}_${convKey}`;
-      localStorage.setItem(lastReadKey, new Date().toISOString());
-
-      // Query without orderBy to avoid index requirement, sort manually
-      const q = query(
-        collection(db, "messages"),
-        where("houseId", "==", conversation.houseId)
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const msgs = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // Only msgs between this landlord and this tenant (by email or UID)
-        const tenantEmail = conversation.tenantEmail;
-        const tenantId = conversation.tenantId;
-        const filtered = msgs.filter(
-          (m) =>
-            (m.senderId === currentUser.uid &&
-              (m.receiverEmail === tenantEmail || m.receiverId === tenantId || m.receiverId === tenantEmail)) ||
-            ((m.senderId === tenantId || m.senderEmail === tenantEmail) &&
-              (m.receiverId === currentUser.uid || m.receiverEmail === currentUser.email))
-        );
-
-        // Update last read time when messages are loaded/viewed
-        if (filtered.length > 0) {
-          const latestMessage = filtered[filtered.length - 1];
-          const latestTime = latestMessage.timestamp?.toDate?.() || new Date(latestMessage.timestamp);
-          localStorage.setItem(lastReadKey, latestTime.toISOString());
-          
-          // Mark all current messages in this conversation as processed to prevent toasts on refresh
-          const processedKey = `landlord_processed_messages_${currentUser.uid}`;
-          try {
-            const stored = localStorage.getItem(processedKey);
-            const processedIds = stored ? new Set(JSON.parse(stored)) : new Set();
-            filtered.forEach(msg => {
-              if (msg.senderId !== currentUser.uid) {
-                processedIds.add(msg.id);
-              }
-            });
-            const idsArray = Array.from(processedIds).slice(-1000);
-            localStorage.setItem(processedKey, JSON.stringify(idsArray));
-          } catch (error) {
-            console.warn('Failed to update processed message IDs:', error);
-          }
-        }
-
-        setMessages(filtered.sort((a, b) => {
-          const aTime = a.timestamp?.toDate?.() || a.timestamp || 0;
-          const bTime = b.timestamp?.toDate?.() || b.timestamp || 0;
-          return aTime - bTime;
-        }));
-      });
-
-      return () => unsubscribe();
-    }, [conversation, currentUser]);
-
-    const handleSendNewMessage = async (e) => {
-      e.preventDefault();
-      if (!newMessageText.trim()) return;
-
-      const messageToSend = newMessageText.trim();
-
-      // Optimistically add message to local state
-      const optimisticMessage = {
-        id: `temp-${Date.now()}`,
-        text: messageToSend,
-        houseId: conversation.houseId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Landlord",
-        senderEmail: currentUser.email,
-        receiverId: conversation.tenantId,
-        receiverName: conversation.tenantName,
-        timestamp: { toDate: () => new Date() },
-      };
-
-      setMessages(prev => [...prev, optimisticMessage]);
-      setNewMessageText("");
-
-      try {
-        await addDoc(collection(db, "messages"), {
-          text: messageToSend,
-          houseId: conversation.houseId,
-          houseTitle: conversation.houseTitle,
-          senderId: currentUser.uid,
-          senderName: currentUser.displayName || "Landlord",
-          senderEmail: currentUser.email,
-          receiverId: conversation.tenantId || conversation.tenantEmail,
-          receiverEmail: conversation.tenantEmail,
-          receiverName: conversation.tenantName,
-          timestamp: serverTimestamp(),
-        });
-        toast.success('Message sent successfully');
-      } catch (error) {
-        console.error('Error sending message:', error);
-        // Remove optimistic message on error
-        setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-        setNewMessageText(messageToSend);
-        toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
-      }
-    };
-
-    const handleLocalReply = async (originalMessage, replyText) => {
-      if (!replyText.trim()) return;
-
-      const replyMessageText = replyText.trim();
-
-      // Optimistically add reply message to local state
-      const optimisticMessage = {
-        id: `temp-${Date.now()}`,
-        text: replyMessageText,
-        houseId: conversation.houseId,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || "Landlord",
-        senderEmail: currentUser.email,
-        receiverId: conversation.tenantId || conversation.tenantEmail,
-        receiverEmail: conversation.tenantEmail,
-        receiverName: conversation.tenantName,
-        timestamp: { toDate: () => new Date() },
-      };
-
-      setMessages(prev => [...prev, optimisticMessage]);
-      setLocalReplyingTo(null);
-      setLocalReplyMessage("");
-
-      try {
-        await addDoc(collection(db, "messages"), {
-          text: replyMessageText,
-          houseId: conversation.houseId,
-          houseTitle: conversation.houseTitle,
-          senderId: currentUser.uid,
-          senderName: currentUser.displayName || "Landlord",
-          senderEmail: currentUser.email,
-          receiverId: conversation.tenantId || conversation.tenantEmail,
-          receiverEmail: conversation.tenantEmail,
-          receiverName: conversation.tenantName,
-          timestamp: serverTimestamp(),
-        });
-        toast.success('Reply sent successfully');
-      } catch (error) {
-        console.error('Error sending reply:', error);
-        setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-        setLocalReplyingTo(originalMessage);
-        setLocalReplyMessage(replyMessageText);
-        toast.error('Failed to send reply: ' + (error.message || 'Unknown error'));
-      }
-    };
-
-    const renderMessages = () => {
-      if (messages.length === 0) {
-        return (
-          <div className="no-messages">
-            <h4>No messages yet</h4>
-            <p>Click on a message to reply</p>
-          </div>
-        );
-      }
-
-      const convKey = `${conversation.tenantEmail || conversation.tenantId}_${conversation.houseId}`;
-      const lastReadKey = `landlord_last_read_${currentUser.uid}_${convKey}`;
-      const lastReadIso = localStorage.getItem(lastReadKey);
-      const lastReadAt = lastReadIso ? new Date(lastReadIso) : null;
-
-      // find last tenant message time
-      const tenantMessages = messages.filter(m => m.senderId !== currentUser.uid);
-      const lastTenantMsg = tenantMessages[tenantMessages.length - 1];
-      const lastTenantTime = lastTenantMsg ? (lastTenantMsg.timestamp?.toDate?.() || new Date(lastTenantMsg.timestamp)) : null;
-
-      // Group messages by date and user
-      const groupedMessages = messages.reduce((groups, msg) => {
-        const date = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-        const dateKey = date.toDateString();
-
-        if (!groups[dateKey]) {
-          groups[dateKey] = [];
-        }
-        groups[dateKey].push(msg);
-        return groups;
-      }, {});
-
-      return Object.entries(groupedMessages).map(([dateKey, msgs]) => (
-        <div key={dateKey} className="message-group">
-          <div className="date-separator">
-            <span>{new Date(dateKey).toLocaleDateString()}</span>
-          </div>
-
-          {(() => {
-            const messageGroups = [];
-            let currentGroup = null;
-
-            msgs.forEach((msg, index) => {
-              const isSent = msg.senderId === currentUser.uid;
-              const timestamp = msg.timestamp?.toDate?.() || new Date(msg.timestamp);
-              const timeString = timestamp.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-
-              if (!currentGroup || currentGroup.senderId !== msg.senderId) {
-                currentGroup = {
-                  senderId: msg.senderId,
-                  senderName: msg.senderName,
-                  senderEmail: msg.senderEmail,
-                  isSent,
-                  messages: []
-                };
-                messageGroups.push(currentGroup);
-              }
-
-              currentGroup.messages.push({
-                ...msg,
-                timeString,
-                isLastInGroup: index === msgs.length - 1 || msgs[index + 1].senderId !== msg.senderId
-              });
-            });
-
-            return messageGroups.map((group, groupIndex) => (
-              <div
-                key={`group-${groupIndex}`}
-                className={`message-group-wrapper ${group.isSent ? 'sent' : 'received'}`}
-              >
-                <div className="message-avatar">
-                  {group.senderName?.charAt(0).toUpperCase() || 'U'}
-                </div>
-
-                <div className="message-cluster">
-                  <div className="message-header">
-                    <span className={`message-sender-name ${!group.isSent ? 'tenant-badge' : ''}`}>
-                      {group.isSent ? 'You' : 'Tenant'}
-                    </span>
-                    {group.senderEmail && !group.isSent && (
-                      <span className="message-sender-email">({group.senderEmail})</span>
-                    )}
-                  </div>
-
-                  {group.messages.map((msg, msgIndex) => (
-                    <div
-                      key={msg.id}
-                      className={`message-bubble ${group.isSent ? 'sent' : 'received'} ${msg.isLastInGroup ? 'last' : ''}`}
-                      onClick={() => !group.isSent && setLocalReplyingTo(msg)}
-                    >
-                      <div className="message-content">
-                        <p className="message-text">{msg.text}</p>
-                        <span className="message-time">{msg.timeString}</span>
-                      </div>
-                      {!group.isSent && lastReadAt && lastTenantMsg && msg.id === lastTenantMsg.id && (
-                        <div style={{ marginTop: 4, fontSize: 11, color: '#9ca3af' }}>Seen by landlord</div>
-                      )}
-
-                      {/* Inline reply input */}
-                      {localReplyingTo?.id === msg.id && (
-                        <div className="inline-reply">
-                          <div className="reply-indicator">
-                            <span>Replying to: {msg.text.substring(0, 50)}{msg.text.length > 50 ? '...' : ''}</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLocalReplyingTo(null);
-                                setLocalReplyMessage("");
-                              }}
-                              className="cancel-reply"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <form
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              handleLocalReply(msg, localReplyMessage);
-                            }}
-                            className="reply-form"
-                          >
-                            <input
-                              type="text"
-                              value={localReplyMessage}
-                              onChange={(e) => setLocalReplyMessage(e.target.value)}
-                              placeholder="Type your reply..."
-                              className="reply-input"
-                              autoFocus
-                            />
-                          </form>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ));
-          })()}
-        </div>
-      ));
-    };
-
+  if (loading) {
     return (
-      <div className="tenant-chat-container">
-        <div className="tenant-chat-header">
-          <div className="tenant-info">
-            <div className="tenant-details">
-              <h4 style={{ background: '#5a6fd8', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', display: 'inline-block' }}>{conversation.tenantName}</h4>
-              <p>House needed: {houseTitle}{houseSize ? `_${houseSize}` : ''}</p>
-              {conversation.tenantEmail && (
-                <span className="tenant-email">Tenant's email:{conversation.tenantEmail}</span>
-              )}
-            </div>
-          </div>
-          <div className="chat-stats">
-            <span className="message-count">{conversation.messageCount} messages</span>
-          </div>
-        </div>
-
-        <div className="tenant-messages-container">
-          {renderMessages()}
-        </div>
-
-        {/* Message input for sending new messages */}
-        <div className="tenant-message-input">
-          <form onSubmit={handleSendNewMessage} className="message-form">
-            <input
-              type="text"
-              value={newMessageText}
-              onChange={(e) => setNewMessageText(e.target.value)}
-              placeholder={`Message ${conversation.tenantName}...`}
-              className="message-input"
-            />
-            <button type="submit" className="send-btn" disabled={!newMessageText.trim()}>
-              Send
-            </button>
-          </form>
+      <div className={`landlord-chats ${isDarkMode ? 'dark' : 'light'}`}>
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading conversations...</p>
         </div>
       </div>
     );
-  };
-
+  }
 
   return (
     <div className={`landlord-chats ${isDarkMode ? 'dark' : 'light'}`}>
-      <div className="chats-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Tenant Conversations</h2>
-          <p>{conversations.length} active chats</p>
-        </div>
-        <button onClick={handleDeleteAllConversations} className="delete-all-btn">Delete All Conversations</button>
+      <div className="chats-header">
+        <h2>Messages</h2>
+        <p>Chat with tenants about your properties</p>
       </div>
 
-      {conversations.length === 0 ? (
-        <div className="no-conversations">
-          <h3>No conversations yet</h3>
-          <p>Messages from tenants will appear here</p>
-        </div>
-      ) : (
-        <div className="chat-container">
-          <div className="tenant-chats-grid" style={{ flex: 1 }}>
-            {conversations.map((c) => {
-              const key = `${c.tenantEmail || c.tenantId}_${c.houseId}`;
-              const isActive = key === selectedKey;
-              const unread = messageCounts[key]?.unreadCount || 0;
-              return (
-                <div
-                  key={key}
-                  className={`tenant-chat-container`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => handleSelectConversation(key, c)}
-                >
-                  <div className="tenant-chat-header">
-                    <div className="tenant-info">
-                      <div className="tenant-details">
-                        <h4>{maskEmail(c.tenantEmail) || c.tenantName || 'Tenant'}</h4>
-                        <p>{(c.houseTitle || 'House')}{c.houseSize ? `_${c.houseSize}` : ''}</p>
-                      </div>
-                    </div>
-                    <div className="chat-stats">
-                      <span className="message-count">{timeStr(c.lastTime)}</span>
-                    </div>
-                  </div>
-                  <div className="tenant-messages-container" style={{ minHeight: 100 }}>
-                    <div className="conversation-preview">{truncate(c.lastMessage || '')}</div>
-                  </div>
-                  <div className="tenant-message-input" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectConversation(key, c); }} style={{ background: 'transparent', border: 'none', color: '#667eea', fontWeight: 600, cursor: 'pointer' }}>
-                      {isActive ? 'Close Chat' : 'Open Chat →'}
-                    </button>
-                    {unread > 0 && !openedKeys.has(key) && (
-                      <span className="message-count" style={{ background: '#dc3545', color: 'white', borderRadius: 12, padding: '2px 8px' }}>{unread}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      <div className="chat-container">
+        {/* Conversations List - Left Panel */}
+        <div className={`conversations-panel ${showMobileChat ? 'mobile-hidden' : ''}`}>
+          <div className="conversations-header">
+            <MessageCircle size={20} />
+            <span>Conversations ({conversations.length})</span>
           </div>
 
-          <div className="chat-main" style={{ transition: 'all 0.25s ease', transform: selectedConversation ? 'translateX(0)' : 'translateX(4px)' }}>
-            {selectedConversation ? (
-              <TenantChatContainer
-                key={selectedKey}
-                conversation={selectedConversation}
-                currentUser={currentUser}
-                isDarkMode={isDarkMode}
-              />
-            ) : (
-              <div className="no-chat-selected">
-                <h4>Select a conversation</h4>
-                <p>Choose a tenant card to view and reply</p>
+          <div className="conversations-list">
+            {conversations.length === 0 ? (
+              <div className="no-conversations">
+                <MessageCircle size={48} />
+                <h4>No conversations yet</h4>
+                <p>Tenants will appear here when they message you about your properties.</p>
               </div>
+            ) : (
+              conversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  className={`conversation-item ${selectedConversation?.id === conversation.id ? 'active' : ''}`}
+                  onClick={() => handleSelectConversation(conversation)}
+                >
+                  <div className="conversation-avatar">
+                    {conversation.tenantName.charAt(0).toUpperCase()}
+                  </div>
+
+                  <div className="conversation-content">
+                    <div className="conversation-header">
+                      <span className="tenant-name">{conversation.tenantName}</span>
+                      <span className="timestamp">{formatTime(conversation.lastTime)}</span>
+                    </div>
+
+                    <div className="house-title">{conversation.houseTitle}</div>
+
+                    <div className="last-message">
+                      {truncateMessage(conversation.lastMessage)}
+                    </div>
+                  </div>
+
+                  {conversation.unreadCount > 0 && (
+                    <div className="unread-badge">
+                      {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
         </div>
-      )}
+
+        {/* Chat Panel - Right Panel */}
+        <div className={`chat-panel ${showMobileChat ? 'mobile-visible' : ''}`}>
+          {selectedConversation ? (
+            <>
+              {/* Chat Header */}
+              <div className="chat-header">
+                <button
+                  className="back-button mobile-only"
+                  onClick={() => setShowMobileChat(false)}
+                >
+                  <ArrowLeft size={20} />
+                </button>
+
+                <div className="chat-avatar">
+                  {selectedConversation.tenantName.charAt(0).toUpperCase()}
+                </div>
+
+                <div className="chat-info">
+                  <h4>{selectedConversation.tenantName}</h4>
+                  <p>{selectedConversation.houseTitle}</p>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="messages-container">
+                {messages.length === 0 ? (
+                  <div className="no-messages">
+                    <MessageCircle size={48} />
+                    <h4>No messages yet</h4>
+                    <p>Start a conversation with this tenant.</p>
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`message ${message.sender === currentUser.id ? 'sent' : 'received'}`}
+                    >
+                      <div className="message-content">
+                        <p>{message.text}</p>
+                        <span className="message-time">
+                          {new Date(message.timestamp).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Message Input */}
+              <form className="message-input" onSubmit={handleSendMessage}>
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Type a message..."
+                  className="message-field"
+                />
+                <button
+                  type="submit"
+                  className="send-button"
+                  disabled={!newMessage.trim()}
+                >
+                  <Send size={20} />
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="no-chat-selected">
+              <MessageCircle size={64} />
+              <h3>Select a conversation</h3>
+              <p>Choose a tenant from the list to start chatting</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 export default LandlordChats;
-
-
-

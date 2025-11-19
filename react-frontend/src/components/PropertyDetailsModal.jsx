@@ -74,7 +74,7 @@ function PropertyDetailsModal({
     if (!currentUser) {
       // Redirect to login with favorite house ID
       navigate(`/login?favoriteHouseId=${house.id}`);
-      toast.info('Please sign in to save favorites');
+      toast.success('Please sign in to save favorites');
       return;
     }
     if (onFavorite) {

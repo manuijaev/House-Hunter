@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+import uuid
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -12,6 +13,58 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.username} ({self.role})"
+
+class Message(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
+    house = models.ForeignKey('House', on_delete=models.CASCADE, related_name='messages')
+    text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f"Message from {self.sender.username} to {self.receiver.username} about {self.house.title}"
+
+class Payment(models.Model):
+    PAYMENT_STATUS = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Unique transaction identifiers
+    transaction_id = models.CharField(max_length=50, unique=True, blank=True)
+    merchant_request_id = models.CharField(max_length=50, blank=True)
+    checkout_request_id = models.CharField(max_length=50, blank=True)
+
+    # Payment details
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    phone_number = models.CharField(max_length=15)  # Format: 254XXXXXXXXX
+    account_reference = models.CharField(max_length=100)  # Internal reference
+    transaction_desc = models.CharField(max_length=255)
+
+    # Status and response
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='pending')
+    mpesa_receipt_number = models.CharField(max_length=50, blank=True)
+    result_desc = models.TextField(blank=True)
+
+    # Relations
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    house = models.ForeignKey('House', on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Payment {self.transaction_id} - {self.amount} KES - {self.status}"
+
+    class Meta:
+        ordering = ['-created_at']
 
 class House(models.Model):
     APPROVAL_STATUS = [

@@ -28,4 +28,15 @@ urlpatterns = [
 
     # Admin endpoints
     path('admin/change-house-status/<int:house_id>/', views.change_house_status, name='change_house_status'),
+
+    # Message endpoints
+    path('messages/', views.MessageListCreateView.as_view(), name='message-list'),
+    path('messages/<int:pk>/', views.MessageDetailView.as_view(), name='message-detail'),
+    path('houses/<int:house_id>/messages/', views.get_house_messages, name='house-messages'),
+    path('houses/<int:house_id>/messages/mark-read/', views.mark_messages_read, name='mark-messages-read'),
+
+    # Payment endpoints
+    path('payments/initiate/', views.initiate_payment, name='initiate-payment'),
+    path('payments/callback/', views.mpesa_callback, name='mpesa-callback'),
+    path('payments/', views.get_user_payments, name='user-payments'),
 ]
