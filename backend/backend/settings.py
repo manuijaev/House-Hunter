@@ -8,8 +8,16 @@ from datetime import timedelta
 # Load environment variables from a .env file if available
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
-except Exception:
+    from pathlib import Path
+    # Load .env from parent directory (project root)
+    env_path = Path(__file__).resolve().parent.parent / '.env'
+    print(f"Loading .env from: {env_path}")
+    print(f".env file exists: {env_path.exists()}")
+    result = load_dotenv(env_path)
+    print(f"load_dotenv result: {result}")
+    print(f"MPESA_CONSUMER_KEY loaded: {os.getenv('MPESA_CONSUMER_KEY') is not None}")
+except Exception as e:
+    print(f"Error loading .env: {e}")
     pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.

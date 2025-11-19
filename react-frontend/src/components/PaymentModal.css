@@ -1,0 +1,390 @@
+/* Payment Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.payment-modal {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.payment-modal.dark {
+  background: #1a1a1a;
+  color: #e5e5e5;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 0 24px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.payment-modal.dark .modal-header {
+  border-bottom-color: #333;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.payment-modal.dark .modal-header h2 {
+  color: #e5e5e5;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.close-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.payment-modal.dark .close-btn:hover:not(:disabled) {
+  background: #333;
+  color: #e5e5e5;
+}
+
+.close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.payment-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.payment-modal.dark .payment-info {
+  background: #2a2a2a;
+}
+
+.house-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.payment-modal.dark .house-info h3 {
+  color: #e5e5e5;
+}
+
+.house-info p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.payment-modal.dark .house-info p {
+  color: #ccc;
+}
+
+.amount-info {
+  text-align: right;
+}
+
+.amount {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.currency {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.payment-modal.dark .currency {
+  color: #ccc;
+}
+
+.value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.payment-modal.dark .value {
+  color: #e5e5e5;
+}
+
+.amount-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.payment-modal.dark .amount-label {
+  color: #ccc;
+}
+
+.payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.payment-modal.dark .form-group label {
+  color: #e5e5e5;
+}
+
+.form-group input {
+  padding: 12px 16px;
+  border: 2px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.payment-modal.dark .form-group input {
+  background: #333;
+  border-color: #444;
+  color: #e5e5e5;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.payment-modal.dark .form-group input:focus {
+  border-color: #0d7df7;
+}
+
+.form-group input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.payment-modal.dark .form-group input:disabled {
+  background: #222;
+}
+
+.form-group small {
+  color: #666;
+  font-size: 12px;
+}
+
+.payment-modal.dark .form-group small {
+  color: #ccc;
+}
+
+.pay-btn, .retry-btn {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pay-btn:hover:not(:disabled), .retry-btn:hover {
+  background: linear-gradient(135deg, #0056b3, #004085);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.pay-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Status States */
+.payment-pending, .payment-success, .payment-failed {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.status-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.status-icon.success {
+  color: #28a745;
+}
+
+.status-icon.failed {
+  color: #dc3545;
+}
+
+.payment-pending h3, .payment-success h3, .payment-failed h3 {
+  margin: 0 0 12px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.payment-modal.dark .payment-pending h3,
+.payment-modal.dark .payment-success h3,
+.payment-modal.dark .payment-failed h3 {
+  color: #e5e5e5;
+}
+
+.payment-pending p, .payment-success p, .payment-failed p {
+  margin: 0 0 8px 0;
+  color: #666;
+}
+
+.payment-modal.dark .payment-pending p,
+.payment-modal.dark .payment-success p,
+.payment-modal.dark .payment-failed p {
+  color: #ccc;
+}
+
+.instructions {
+  font-weight: 500;
+  color: #1a1a1a !important;
+}
+
+.payment-modal.dark .instructions {
+  color: #e5e5e5 !important;
+}
+
+.waiting-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #007bff;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 1s;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .payment-modal {
+    width: 95%;
+    margin: 20px;
+  }
+
+  .modal-header {
+    padding: 20px 20px 0 20px;
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .payment-info {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .amount-info {
+    text-align: center;
+  }
+
+  .value {
+    font-size: 28px;
+  }
+}

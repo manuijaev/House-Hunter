@@ -274,4 +274,26 @@ export const djangoAPI = {
   markMessagesRead: async (houseId) => {
     return await makeApiCall(`/houses/${houseId}/messages/mark-read/`, { method: 'POST' });
   },
+
+  // =============================
+  // PAYMENT ENDPOINTS
+  // =============================
+
+  initiatePayment: async (paymentData) => {
+    return await makeApiCall('/payments/initiate/', {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+  },
+
+  getUserPayments: async () => {
+    return await makeApiCall('/payments/');
+  },
+
+  simulatePaymentSuccess: async (paymentId) => {
+    return await makeApiCall('/payments/simulate-success/', {
+      method: 'POST',
+      body: JSON.stringify({ payment_id: paymentId }),
+    });
+  },
 };

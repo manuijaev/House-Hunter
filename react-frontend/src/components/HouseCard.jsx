@@ -49,6 +49,7 @@ import { toast } from 'react-hot-toast';
 import { djangoAPI } from '../services/djangoAPI';
 import { useAuth } from '../contexts/AuthContext';
 import PropertyDetailsModal from './PropertyDetailsModal';
+import PaymentModal from './PaymentModal';
 
 // Enhanced amenities configuration with more variety
 const AMENITIES = [
@@ -111,6 +112,7 @@ function HouseCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isViewed, setIsViewed] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Update local state when house prop changes
   useEffect(() => {
@@ -266,6 +268,33 @@ function HouseCard({
     }
   }, [onFavorite, houseData?.id, isFavorite, currentUser, navigate]);
 
+  const handlePaymentClick = useCallback((e) => {
+    e.stopPropagation();
+    console.log('🎯 UNLOCK BUTTON CLICKED! Setting showPaymentModal to true');
+    console.log('🎯 Current state - showPaymentModal:', showPaymentModal, 'userType:', userType);
+    setShowPaymentModal(true);
+  }, [showPaymentModal, userType]);
+
+  const handlePaymentSuccess = useCallback((houseId) => {
+    // Update local payment status - ONLY after confirmed payment from API
+    setIsPaid(true);
+
+    // Update localStorage to persist payment status
+    const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser?.id}`) || '[]');
+    if (!paidHouses.includes(String(houseId))) {
+      paidHouses.push(String(houseId));
+      localStorage.setItem(`paid_houses_${currentUser?.id}`, JSON.stringify(paidHouses));
+    }
+
+    // Show success toast
+    toast.success('Payment confirmed! House chat unlocked successfully.');
+
+    // Trigger any parent component updates
+    if (onPayment) {
+      onPayment(houseData);
+    }
+  }, [houseData, onPayment, currentUser?.id]);
+
   
 
   const handleZoomClick = useCallback((e) => {
@@ -309,11 +338,11 @@ function HouseCard({
 
   const handleCardClick = useCallback((e) => {
     // Don't expand if clicking on interactive elements
-    if (e.target.closest('button') || e.target.closest('.image-nav-btn-enhanced') || 
+    if (e.target.closest('button') || e.target.closest('.image-nav-btn-enhanced') ||
         e.target.closest('.image-action-btn-enhanced')) {
       return;
     }
-    
+
     // Only tenants should expand cards (except landlords in dev mode)
     if (userType === 'tenant') {
       setIsExpanded(!isExpanded);
@@ -770,10 +799,7 @@ function HouseCard({
                       </button>
                       <button
                         className="payment-btn-enhanced"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPayment(houseData);
-                        }}
+                        onClick={handlePaymentClick}
                       >
                         <CreditCard size={16} />
                         <span>Unlock</span>
@@ -982,10 +1008,24 @@ function HouseCard({
           isPaid={isPaid}
           onClose={() => setShowDetailsModal(false)}
           onPayment={onPayment}
+          onUnlockClick={handlePaymentClick}
           isDarkMode={isDarkMode}
           isFavorite={isFavorite}
           onFavorite={onFavorite}
         />
+      )}
+
+      {/* Payment Modal for Unlocking Chat */}
+      {showPaymentModal && userType === 'tenant' && (
+        <>
+          {console.log('Rendering PaymentModal for house:', houseData?.title, 'showPaymentModal:', showPaymentModal, 'userType:', userType)}
+          <PaymentModal
+            house={houseData}
+            onClose={() => setShowPaymentModal(false)}
+            onPaymentSuccess={handlePaymentSuccess}
+            isDarkMode={isDarkMode}
+          />
+        </>
       )}
     </>
   );

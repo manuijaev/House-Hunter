@@ -37,7 +37,7 @@ class Payment(models.Model):
     ]
 
     # Unique transaction identifiers
-    transaction_id = models.CharField(max_length=50, unique=True, blank=True)
+    transaction_id = models.CharField(max_length=50, blank=True)
     merchant_request_id = models.CharField(max_length=50, blank=True)
     checkout_request_id = models.CharField(max_length=50, blank=True)
 
@@ -53,7 +53,7 @@ class Payment(models.Model):
     result_desc = models.TextField(blank=True)
 
     # Relations
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
     house = models.ForeignKey('House', on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
 
     # Timestamps

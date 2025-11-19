@@ -38,5 +38,7 @@ urlpatterns = [
     # Payment endpoints
     path('payments/initiate/', views.initiate_payment, name='initiate-payment'),
     path('payments/callback/', views.mpesa_callback, name='mpesa-callback'),
+    path('payments/simulate-success/', views.simulate_payment_success, name='simulate-payment'),
     path('payments/', views.get_user_payments, name='user-payments'),
+    path('payments/test-config/', views.test_mpesa_config, name='test-mpesa-config'),
 ]

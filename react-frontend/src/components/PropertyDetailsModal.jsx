@@ -27,6 +27,7 @@ function PropertyDetailsModal({
   isPaid,
   onClose,
   onPayment,
+  onUnlockClick,
   isDarkMode,
   isFavorite,
   onFavorite
@@ -180,9 +181,12 @@ function PropertyDetailsModal({
                 <div className="unlock-overlay">
                   <Lock size={32} />
                   <p>Pay viewing fee to unlock contact details</p>
-                  <button className="pay-viewing-fee-btn" onClick={() => onPayment(house)}>
+                  <button className="pay-viewing-fee-btn" onClick={() => {
+                    onClose(); // Close the details modal
+                    if (onUnlockClick) onUnlockClick(); // Open payment modal
+                  }}>
                     <CreditCard size={20} />
-                    <span>Pay Viewing Fee (KES 10)</span>
+                    <span>Pay Viewing Fee (KES 1)</span>
                   </button>
                 </div>
               </div>
