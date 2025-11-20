@@ -25,18 +25,45 @@ export const ThemeProvider = ({ children }) => {
     }
   }, []);
 
-  // Save theme to localStorage whenever it changes
+  // Function to update theme based on current page
+  const updateThemeForCurrentPage = () => {
+    const isOnLandingPage = window.location.pathname === '/' || window.location.pathname === '/landing';
+
+    if (isOnLandingPage) {
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark-theme');
+        document.documentElement.classList.remove('light-theme');
+      } else {
+        document.documentElement.classList.add('light-theme');
+        document.documentElement.classList.remove('dark-theme');
+      }
+    } else {
+      // Remove theme classes from document root for other pages
+      document.documentElement.classList.remove('dark-theme', 'light-theme');
+    }
+  };
+
+  // Save theme to localStorage and apply/remove theme classes based on current page
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    updateThemeForCurrentPage();
+  }, [isDarkMode]);
 
-    // Apply theme to document root
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark-theme');
-      document.documentElement.classList.remove('light-theme');
-    } else {
-      document.documentElement.classList.add('light-theme');
-      document.documentElement.classList.remove('dark-theme');
-    }
+  // Listen for navigation changes
+  useEffect(() => {
+    const handleNavigation = () => {
+      updateThemeForCurrentPage();
+    };
+
+    // Listen for popstate events (browser back/forward)
+    window.addEventListener('popstate', handleNavigation);
+
+    // Also check on initial load
+    updateThemeForCurrentPage();
+
+    return () => {
+      window.removeEventListener('popstate', handleNavigation);
+    };
   }, [isDarkMode]);
 
   const toggleTheme = () => {

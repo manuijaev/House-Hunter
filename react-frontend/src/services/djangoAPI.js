@@ -296,4 +296,14 @@ export const djangoAPI = {
       body: JSON.stringify({ payment_id: paymentId }),
     });
   },
+
+  // =============================
+  // FAVORITES ENDPOINTS
+  // =============================
+
+  getValidFavorites: async (houseIds) => {
+    const params = new URLSearchParams();
+    houseIds.forEach(id => params.append('house_ids[]', id));
+    return await makeApiCall(`/favorites/valid/?${params.toString()}`);
+  },
 };

@@ -19,7 +19,7 @@ MPESA_CONFIG = {
     'consumer_key': os.getenv('MPESA_CONSUMER_KEY') or 'qiNqsHj6rAXhn45oXWcao77JSwyh9IhMDS40xbJoNiymd2wf',
     'consumer_secret': os.getenv('MPESA_CONSUMER_SECRET') or 'l2nulBjDWRAbYIR0ZsCwLfG59ZYayR85mNR2bGh9EMcJeD6IlxXnQQPfStqUcZGS',
     'shortcode': os.getenv('MPESA_SHORTCODE') or '174379',
-    'passkey': os.getenv('MPESA_PASSKEY') or 'bfb279f9aa9bdbcf1f2b1e2102c12c2d7cf3813f4982f56d27c4178d0f82f8c1',
+    'passkey': os.getenv('MPESA_PASSKEY') or 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919',
     'environment': os.getenv('MPESA_ENVIRONMENT', 'sandbox')
 }
 
@@ -49,14 +49,10 @@ def get_mpesa_access_token():
             return data['access_token']
         else:
             print(f"Failed to get access token. Status: {response.status_code}, Response: {response.text}")
-            # Return mock token for development
-            print("Using mock token for development")
-            return "mock_access_token_for_development"
+            raise Exception(f"Failed to get access token: {response.text}")
     except Exception as e:
         print(f"API request failed: {e}")
-        # Return mock token for development
-        print("Using mock token for development (request failed)")
-        return "mock_access_token_for_development"
+        raise Exception(f"API request failed: {str(e)}")
 
 def generate_password():
     """Generate password for STK push"""
@@ -68,18 +64,6 @@ def generate_password():
 def initiate_stk_push(phone_number, amount, account_reference, transaction_desc):
     """Initiate STK push payment"""
     access_token = get_mpesa_access_token()
-
-    # If using mock token, return mock response
-    if access_token == "mock_access_token_for_development":
-        print("Using mock STK push response for development")
-        import uuid
-        return {
-            'MerchantRequestID': str(uuid.uuid4()),
-            'CheckoutRequestID': str(uuid.uuid4()),
-            'ResponseCode': '0',
-            'ResponseDescription': 'Success. Request accepted for processing',
-            'CustomerMessage': 'Success. Request accepted for processing'
-        }
 
     password, timestamp = generate_password()
 
@@ -102,25 +86,13 @@ def initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
         'PartyA': phone_number,
         'PartyB': MPESA_CONFIG['shortcode'],
         'PhoneNumber': phone_number,
-        'CallBackURL': f"{settings.BASE_URL}/api/payments/callback/",
+        'CallBackURL': 'https://mydomain.com/mpesa-express-simulate/',
         'AccountReference': account_reference,
         'TransactionDesc': transaction_desc
     }
 
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        return response.json()
-    except Exception as e:
-        print(f"STK push request failed, using mock response: {e}")
-        # Return mock response for development
-        import uuid
-        return {
-            'MerchantRequestID': str(uuid.uuid4()),
-            'CheckoutRequestID': str(uuid.uuid4()),
-            'ResponseCode': '0',
-            'ResponseDescription': 'Success. Request accepted for processing (mock)',
-            'CustomerMessage': 'Success. Request accepted for processing (mock)'
-        }
+    response = requests.post(url, json=payload, headers=headers, timeout=30)
+    return response.json()
 
 
 class IsLandlord(permissions.BasePermission):
@@ -219,6 +191,32 @@ class HouseDetailView(generics.RetrieveUpdateDestroyAPIView):
         # if response.status_code == 200:
         #     house = self.get_object()
         #     # Update logic here if needed
+
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to broadcast house deletion for favorites cleanup"""
+        house = self.get_object()
+        house_id = house.id
+
+        # Call parent destroy method
+        response = super().destroy(request, *args, **kwargs)
+
+        # Broadcast house deletion event for favorites cleanup
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'favorites_cleanup',
+                {
+                    'type': 'houses_deleted',
+                    'house_ids': [house_id]
+                }
+            )
+        except Exception as e:
+            print(f"Failed to broadcast house deletion: {e}")
 
         return response
 
@@ -368,58 +366,31 @@ def initiate_payment(request):
             transaction_id=''  # Set to empty string initially
         )
 
-        # Try real M-Pesa API first, fallback to mock if it fails
-        try:
-            # Attempt real STK push
-            stk_response = initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
+        # Initiate STK push with real M-Pesa API
+        stk_response = initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
 
-            if stk_response.get('ResponseCode') == '0':
-                # Real API success
-                payment.merchant_request_id = stk_response.get('MerchantRequestID')
-                payment.checkout_request_id = stk_response.get('CheckoutRequestID')
-                payment.save()
-
-                print(f"Real STK push successful for payment {payment.id} - phone: {phone_number}")
-
-                return Response({
-                    'message': 'STK push initiated successfully',
-                    'payment_id': payment.id,
-                    'merchant_request_id': payment.merchant_request_id,
-                    'checkout_request_id': payment.checkout_request_id,
-                    'response': stk_response
-                }, status=status.HTTP_200_OK)
-            else:
-                # Real API failed, use mock fallback
-                print(f"Real STK push failed: {stk_response.get('ResponseDescription')}, using mock fallback")
-                raise Exception("Real API failed")
-
-        except Exception as api_error:
-            # Fallback to mock response
-            print(f"M-Pesa API failed ({str(api_error)}), using mock response")
-
-            import uuid
-            mock_stk_response = {
-                'MerchantRequestID': str(uuid.uuid4()),
-                'CheckoutRequestID': str(uuid.uuid4()),
-                'ResponseCode': '0',
-                'ResponseDescription': 'Success. Request accepted for processing (fallback)',
-                'CustomerMessage': 'Success. Request accepted for processing (fallback)'
-            }
-
-            # Update payment with mock response
-            payment.merchant_request_id = mock_stk_response.get('MerchantRequestID')
-            payment.checkout_request_id = mock_stk_response.get('CheckoutRequestID')
+        if stk_response.get('ResponseCode') == '0':
+            # API success
+            payment.merchant_request_id = stk_response.get('MerchantRequestID')
+            payment.checkout_request_id = stk_response.get('CheckoutRequestID')
             payment.save()
 
-            print(f"Mock STK push fallback for payment {payment.id} - phone: {phone_number}, amount: {amount}")
+            print(f"STK push successful for payment {payment.id} - phone: {phone_number}")
 
             return Response({
-                'message': 'STK push initiated successfully (fallback)',
+                'message': 'STK push initiated successfully',
                 'payment_id': payment.id,
                 'merchant_request_id': payment.merchant_request_id,
                 'checkout_request_id': payment.checkout_request_id,
-                'response': mock_stk_response
+                'response': stk_response
             }, status=status.HTTP_200_OK)
+        else:
+            # API failed
+            print(f"STK push failed: {stk_response.get('ResponseDescription')}")
+            return Response({
+                'error': f'STK push failed: {stk_response.get("ResponseDescription")}',
+                'response': stk_response
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     except Exception as e:
         print(f"Payment initiation error: {e}")
@@ -568,6 +539,38 @@ def get_user_payments(request):
         })
 
     return Response({'payments': payment_data}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_valid_favorites(request):
+    """Get user's favorites that still exist in the database"""
+    user = request.user
+
+    # Get user's favorites from localStorage (this would be sent from frontend)
+    # For now, we'll return an empty list since favorites are stored client-side
+    # In a production app, you'd want to store favorites server-side
+
+    # For this implementation, we'll assume favorites are managed client-side
+    # but we provide an endpoint to validate which houses still exist
+    favorite_house_ids = request.query_params.getlist('house_ids[]', [])
+
+    if not favorite_house_ids:
+        return Response({'favorites': []}, status=status.HTTP_200_OK)
+
+    # Filter to only houses that exist and are approved/vacant
+    existing_houses = House.objects.filter(
+        id__in=favorite_house_ids,
+        approval_status='approved',
+        is_vacant=True
+    ).values_list('id', flat=True)
+
+    valid_favorites = list(existing_houses)
+
+    return Response({
+        'favorites': valid_favorites,
+        'total_count': len(valid_favorites)
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -779,7 +782,25 @@ def delete_user(request, user_id):
 
         # Delete all houses associated with this user if they are a landlord
         if user.role == 'landlord':
+            # Get house IDs before deletion for cleanup
+            house_ids = list(House.objects.filter(landlord=user).values_list('id', flat=True))
             House.objects.filter(landlord=user).delete()
+    
+            # Broadcast house deletion event for favorites cleanup
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+    
+            try:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    'favorites_cleanup',
+                    {
+                        'type': 'houses_deleted',
+                        'house_ids': house_ids
+                    }
+                )
+            except Exception as e:
+                print(f"Failed to broadcast house deletion: {e}")
 
         user.delete()
 

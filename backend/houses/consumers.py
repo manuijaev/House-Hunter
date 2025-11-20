@@ -152,3 +152,40 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error saving message: {e}")
             return None
+
+
+class FavoritesCleanupConsumer(AsyncWebsocketConsumer):
+    """Consumer for handling real-time favorites cleanup when houses are deleted"""
+
+    async def connect(self):
+        self.user = self.scope.get('user')
+
+        if not self.user or not self.user.is_authenticated:
+            await self.close()
+            return
+
+        # Join the favorites cleanup group
+        await self.channel_layer.group_add(
+            'favorites_cleanup',
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Leave the favorites cleanup group
+        await self.channel_layer.group_discard(
+            'favorites_cleanup',
+            self.channel_name
+        )
+
+    # Receive house deletion event from group
+    async def houses_deleted(self, event):
+        """Handle houses deleted event"""
+        house_ids = event['house_ids']
+
+        # Send the deleted house IDs to the client
+        await self.send(text_data=json.dumps({
+            'type': 'houses_deleted',
+            'house_ids': house_ids
+        }))

@@ -1,5 +1,6 @@
-/* Enhanced Dynamic Landing Page CSS */
-.landing-page {
+/* Enhanced Dynamic Landing Page CSS - Completely Isolated */
+/* Ensure landing page styles don't leak to other pages */
+div.landing-page {
   min-height: 100vh;
   width: 100vw;
   margin: 0;
@@ -7,6 +8,9 @@
   position: relative;
   overflow-x: hidden;
   background: #000000;
+  /* Isolation styles */
+  z-index: 1;
+  isolation: isolate;
 }
 
 /* Dynamic Theme Variables */
@@ -25,8 +29,23 @@
   --glass-border: rgba(255, 255, 255, 0.1);
 }
 
-/* Enhanced Background */
-.background-overlay {
+.landing-page.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6c757d;
+  --text-accent: #6366f1;
+  --border-color: rgba(99, 102, 241, 0.3);
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --gradient-primary: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --gradient-secondary: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced Background - Scoped to Landing Page */
+.landing-page .background-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -35,7 +54,7 @@
   z-index: -2;
 }
 
-.background-image {
+.landing-page .background-image {
   position: absolute;
   top: 0;
   left: 0;
@@ -49,7 +68,7 @@
   filter: brightness(0.3) contrast(1.2);
 }
 
-.particles-container {
+.landing-page .particles-container {
   position: absolute;
   top: 0;
   left: 0;
@@ -59,7 +78,7 @@
 }
 
 
-.particle {
+.landing-page .particle {
   position: absolute;
   background: rgba(99, 102, 241, 0.1);
   border-radius: 50%;
@@ -83,8 +102,8 @@
   }
 }
 
-/* Enhanced Header */
-.landing-header {
+/* Enhanced Header - Scoped to Landing Page */
+.landing-page .landing-header {
   position: fixed;
   top: 0;
   left: 0;
@@ -298,15 +317,15 @@
   font-size: 0.9rem;
 }
 
-/* Enhanced Main Content */
-.main-content {
+/* Enhanced Main Content - Scoped to Landing Page */
+.landing-page .main-content {
   min-height: 100vh;
   padding-top: 80px;
   width: 100vw;
 }
 
-/* Enhanced Hero Section */
-.hero-section {
+/* Enhanced Hero Section - Scoped to Landing Page */
+.landing-page .hero-section {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -325,7 +344,7 @@
   background-color: rgba(0, 0, 0, 0.3);
 }
 
-.hero-section::before {
+.landing-page .hero-section::before {
   content: '';
   position: absolute;
   top: 0;
@@ -342,7 +361,7 @@
   z-index: 1;
 }
 
-.hero-section > * {
+.landing-page .hero-section > * {
   position: relative;
   z-index: 2;
 }
@@ -351,6 +370,8 @@
   max-width: 1200px;
   text-align: center;
   width: 100%;
+  /* Ensure text is always visible on dark background */
+  color: #ffffff !important;
 }
 
 .hero-badge {
@@ -372,7 +393,7 @@
   font-weight: 800;
   margin-bottom: 1.5rem;
   line-height: 1.1;
-  color: var(--text-primary);
+  color: #ffffff !important; /* Always white for visibility on dark background */
 }
 
 .gradient-text {
@@ -384,7 +405,7 @@
 
 .hero-subtitle {
   font-size: 1.3rem;
-  color: var(--text-secondary);
+  color: #e0e0e0 !important; /* Light gray for visibility on dark background */
   margin-bottom: 3rem;
   line-height: 1.6;
   max-width: 600px;
@@ -399,7 +420,7 @@
   gap: 3rem;
   margin-bottom: 3rem;
   flex-wrap: wrap;
-  color: var(--text-secondary);
+  color: #e0e0e0 !important; /* Light gray for visibility */
 }
 
 .hero-stat {
@@ -407,10 +428,11 @@
   align-items: center;
   gap: 1rem;
   padding: 1.5rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   backdrop-filter: blur(10px);
+  color: #ffffff !important;
 }
 
 .stat-icon {
@@ -432,13 +454,13 @@
   display: block;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff !important; /* Always white */
 }
 
 .stat-label {
   display: block;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #e0e0e0 !important; /* Light gray */
 }
 
 /* Enhanced Hero Search */
@@ -446,10 +468,11 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
-  padding: 2rem;
+  padding: 2.5rem;
   margin-bottom: 2rem;
   backdrop-filter: blur(20px);
-  max-width: 800px;
+  max-width: 1200px; /* Further increased for more space */
+  width: 95%; /* Increased responsive width */
   margin-left: auto;
   margin-right: auto;
 }
@@ -473,10 +496,14 @@
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .search-box {
   flex: 1;
+  min-width: 200px;
   display: flex;
   align-items: center;
   background: var(--bg-tertiary);
@@ -504,6 +531,16 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0.25rem;
+}
+
+/* Search Action Button */
+.search-action {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .quick-filters {
@@ -551,7 +588,7 @@
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary);
+  color: #e0e0e0 !important; /* Light gray for visibility */
   font-size: 0.9rem;
 }
 
@@ -841,28 +878,29 @@
   50% { transform: translateY(-10px); }
 }
 
-/* Utility Classes */
-.dynamic-card {
+/* Utility Classes - Scoped to Landing Page Only */
+.landing-page .dynamic-card {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 20px;
   backdrop-filter: blur(10px);
+  max-width: 100%;
 }
 
-.dynamic-input {
+.landing-page .dynamic-input {
   background: var(--bg-tertiary);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   color: var(--text-primary);
 }
 
-.glass-effect {
+.landing-page .glass-effect {
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
 }
 
-.dynamic-gradient-text {
+.landing-page .dynamic-gradient-text {
   background: var(--gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -961,20 +999,20 @@
   }
 }
 
-/* Enhanced Scrollbar */
-::-webkit-scrollbar {
+/* Enhanced Scrollbar - Scoped to Landing Page */
+.landing-page ::-webkit-scrollbar {
   width: 8px;
 }
 
-::-webkit-scrollbar-track {
+.landing-page ::-webkit-scrollbar-track {
   background: var(--bg-secondary);
 }
 
-::-webkit-scrollbar-thumb {
+.landing-page ::-webkit-scrollbar-thumb {
   background: var(--gradient-primary);
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.landing-page ::-webkit-scrollbar-thumb:hover {
   background: var(--text-accent);
 }

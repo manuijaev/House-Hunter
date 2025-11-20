@@ -135,7 +135,7 @@ function LandingPage() {
   };
 
   return (
-    <div className={`landing-page dynamic-theme ${isDarkMode ? 'dark' : 'light'}`}>
+    <div className={`landing-page ${isDarkMode ? 'dark' : 'light'}`}>
       {/* Enhanced Background */}
       <div className="background-overlay">
         <div 

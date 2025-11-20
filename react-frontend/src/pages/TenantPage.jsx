@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useFavoritesManager } from '../utils/FavoritesManager';
 import { djangoAPI } from '../services/djangoAPI';
 import {
   Search,
@@ -41,6 +42,7 @@ import Logo from '../components/Logo';
 function TenantPage() {
   const { logout, currentUser, userPreferences, userRecommendations, updateUserRecommendations } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { favorites, favoritesCount, toggleFavorite, isFavorited, forceCleanup } = useFavoritesManager();
   const [houses, setHouses] = useState([]);
   const [filteredHouses, setFilteredHouses] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,7 +58,6 @@ function TenantPage() {
   const [priceRange, setPriceRange] = useState([0, 500000]);
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [favoriteHouses, setFavoriteHouses] = useState(new Set());
   const [showFavorites, setShowFavorites] = useState(false);
 
 
@@ -121,7 +122,7 @@ function TenantPage() {
 
     // Favorites filter - show only favorites when showFavorites is true
     if (showFavorites) {
-      housesToDisplay = housesToDisplay.filter(house => favoriteHouses.has(String(house.id)));
+      housesToDisplay = housesToDisplay.filter(house => favorites.includes(String(house.id)));
     }
 
     // Search filter
@@ -185,7 +186,7 @@ function TenantPage() {
     });
 
     setFilteredHouses(housesToDisplay);
-  }, [searchQuery, houses, activeFilter, sortBy, priceRange, aiRecommendedIds, showFavorites, favoriteHouses]);
+  }, [searchQuery, houses, activeFilter, sortBy, priceRange, aiRecommendedIds, showFavorites, favorites]);
 
   // Enhanced tenant location fetching and favorites loading
   useEffect(() => {
@@ -202,46 +203,33 @@ function TenantPage() {
       }
     };
 
-    // Load favorites from localStorage
+    // Check for pending favorite redirect
     if (currentUser?.id) {
-      try {
-        const savedFavorites = JSON.parse(localStorage.getItem(`favorites_${currentUser.id}`) || '[]');
-        const favoritesSet = new Set(savedFavorites);
-        setFavoriteHouses(favoritesSet);
+      const pendingFavoriteHouseId = localStorage.getItem('pendingFavoriteRedirect');
+      if (pendingFavoriteHouseId) {
+        localStorage.removeItem('pendingFavoriteRedirect');
 
-        // Check for pending favorite redirect
-        const pendingFavoriteHouseId = localStorage.getItem('pendingFavoriteRedirect');
-        if (pendingFavoriteHouseId) {
-          localStorage.removeItem('pendingFavoriteRedirect');
-
-          // Add the house to favorites if not already
-          if (!favoritesSet.has(String(pendingFavoriteHouseId))) {
-            const newFavorites = new Set(favoritesSet);
-            newFavorites.add(String(pendingFavoriteHouseId));
-            setFavoriteHouses(newFavorites);
-            localStorage.setItem(`favorites_${currentUser.id}`, JSON.stringify(Array.from(newFavorites)));
-            toast.success('Property added to favorites!', { duration: 2000 });
-          }
-
-          // Enable favorites view
-          setShowFavorites(true);
-
-          // Scroll to the house after a short delay to allow rendering
-          setTimeout(() => {
-            const houseElement = document.getElementById(`house-${pendingFavoriteHouseId}`);
-            if (houseElement) {
-              houseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              // Add a temporary highlight effect
-              houseElement.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.5)';
-              setTimeout(() => {
-                houseElement.style.boxShadow = '';
-              }, 3000);
-            }
-          }, 1000);
+        // Add the house to favorites if not already
+        if (!favorites.includes(String(pendingFavoriteHouseId))) {
+          toggleFavorite(String(pendingFavoriteHouseId));
+          toast.success('Property added to favorites!', { duration: 2000 });
         }
-      } catch (error) {
-        console.error('Error loading favorites:', error);
-        setFavoriteHouses(new Set());
+
+        // Enable favorites view
+        setShowFavorites(true);
+
+        // Scroll to the house after a short delay to allow rendering
+        setTimeout(() => {
+          const houseElement = document.getElementById(`house-${pendingFavoriteHouseId}`);
+          if (houseElement) {
+            houseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Add a temporary highlight effect
+            houseElement.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.5)';
+            setTimeout(() => {
+              houseElement.style.boxShadow = '';
+            }, 3000);
+          }
+        }, 1000);
       }
     }
 
@@ -376,28 +364,6 @@ function TenantPage() {
     }
   };
 
-  // Favorites handling
-  const handleToggleFavorite = (houseId, isFavorited) => {
-    if (!currentUser?.id) return;
-
-    const newFavorites = new Set(favoriteHouses);
-    if (isFavorited) {
-      newFavorites.add(String(houseId));
-      toast.success('Property added to favorites!', { duration: 2000 });
-    } else {
-      newFavorites.delete(String(houseId));
-      toast.success('Property removed from favorites', { duration: 2000 });
-    }
-
-    setFavoriteHouses(newFavorites);
-
-    // Persist to localStorage
-    try {
-      localStorage.setItem(`favorites_${currentUser.id}`, JSON.stringify(Array.from(newFavorites)));
-    } catch (error) {
-      console.error('Error saving favorites:', error);
-    }
-  };
 
   const handleToggleFavoritesView = () => {
     setShowFavorites(!showFavorites);
@@ -454,8 +420,8 @@ function TenantPage() {
             >
               <Heart size={20} />
               <span>Favorites</span>
-              {favoriteHouses.size > 0 && (
-                <span className="favorites-count">{favoriteHouses.size}</span>
+              {favoritesCount > 0 && (
+                <span className="favorites-count">{favoritesCount}</span>
               )}
             </button>
 
@@ -613,9 +579,9 @@ function TenantPage() {
               </div>
             )}
 
-            {showFavorites && favoriteHouses.size > 0 && (
+            {showFavorites && favoritesCount > 0 && (
               <div className="favorites-summary">
-                <span>You have {favoriteHouses.size} favorite propert{favoriteHouses.size === 1 ? 'y' : 'ies'}</span>
+                <span>You have {favoritesCount} favorite propert{favoritesCount === 1 ? 'y' : 'ies'}</span>
                 <button
                   className="return-to-dashboard-btn dynamic-btn secondary-btn"
                   onClick={() => {
@@ -652,13 +618,13 @@ function TenantPage() {
                     userType="tenant"
                     onChat={() => handleChat(house)}
                     onPayment={() => handlePayment(house)}
-                    onFavorite={handleToggleFavorite}
+                    onFavorite={toggleFavorite}
                     isDarkMode={isDarkMode}
                     messageCount={houseMessageCounts[house.id] || 0}
                     isRecommended={aiRecommendedIds.includes(house.id)}
                     isNew={house.isNew}
                     animationDelay={index * 0.1}
-                    isFavorite={favoriteHouses.has(String(house.id))}
+                    isFavorite={isFavorited(String(house.id))}
                   />
                 </div>
               ))}
@@ -670,7 +636,7 @@ function TenantPage() {
                 <h3>{showFavorites ? 'No Favorite Properties' : 'No Properties Found'}</h3>
                 <p>
                   {showFavorites
-                    ? (favoriteHouses.size === 0
+                    ? (favoritesCount === 0
                         ? 'You haven\'t favorited any properties yet. Heart properties you like to see them here!'
                         : 'No favorites match your current search.')
                     : (searchQuery || activeFilter !== 'all'
@@ -678,7 +644,7 @@ function TenantPage() {
                         : 'No available properties matching your criteria at the moment')
                   }
                 </p>
-                {showFavorites && favoriteHouses.size === 0 ? (
+                {showFavorites && favoritesCount === 0 ? (
                   <button
                     className="browse-properties-btn dynamic-btn primary-btn"
                     onClick={() => {

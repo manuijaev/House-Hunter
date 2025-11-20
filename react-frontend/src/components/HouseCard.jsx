@@ -48,6 +48,7 @@ import '../components/HouseCard.css';
 import { toast } from 'react-hot-toast';
 import { djangoAPI } from '../services/djangoAPI';
 import { useAuth } from '../contexts/AuthContext';
+import { useFavoritesManager } from '../utils/FavoritesManager';
 import PropertyDetailsModal from './PropertyDetailsModal';
 import PaymentModal from './PaymentModal';
 
@@ -82,7 +83,7 @@ function HouseCard({
   isDarkMode,
   messageCount = 0,
   isRecommended = false,
-  isFavorite = false,
+  isFavorite: propIsFavorite = false, // Rename to avoid conflict
   isFeatured = false,
   showActions = true,
   showAdminActions = false,
@@ -101,6 +102,7 @@ function HouseCard({
   }
 
   const { currentUser } = useAuth();
+  const { toggleFavorite, isFavorited } = useFavoritesManager();
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
@@ -145,6 +147,9 @@ function HouseCard({
       }
     }
   }, [userType, currentUser, house?.id]);
+
+  // Get favorite status from the favorites manager
+  const isFavorite = isFavorited(String(house?.id || ''));
 
   // Helper function to normalize approval status
   const normalizeApprovalStatus = useCallback((status) => {
@@ -263,10 +268,14 @@ function HouseCard({
       toast.success('Please sign in to save favorites');
       return;
     }
-    if (onFavorite && houseData?.id) {
-      onFavorite(houseData.id, !isFavorite);
+    if (houseData?.id) {
+      toggleFavorite(String(houseData.id));
+      // Also call the parent onFavorite if provided (for backward compatibility)
+      if (onFavorite) {
+        onFavorite(houseData.id, !isFavorite);
+      }
     }
-  }, [onFavorite, houseData?.id, isFavorite, currentUser, navigate]);
+  }, [houseData?.id, toggleFavorite, isFavorite, onFavorite, currentUser, navigate]);
 
   const handlePaymentClick = useCallback((e) => {
     e.stopPropagation();
