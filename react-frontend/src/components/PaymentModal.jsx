@@ -8,8 +8,8 @@ import './PaymentModal.css';
 function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
   const { currentUser } = useAuth();
 
-  console.log('🔥 PaymentModal COMPONENT RENDERED for house:', house?.title);
-  console.log('🔥 Props received:', { house: !!house, onClose: !!onClose, onPaymentSuccess: !!onPaymentSuccess, isDarkMode });
+  console.log('PaymentModal COMPONENT RENDERED for house:', house?.title);
+  console.log('Props received:', { house: !!house, onClose: !!onClose, onPaymentSuccess: !!onPaymentSuccess, isDarkMode });
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState(null); // null, 'pending', 'completed', 'failed'
@@ -27,40 +27,40 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
     let intervalId;
 
     if (paymentId && paymentStatus === 'pending') {
-      console.log('🔄 Starting payment status polling for payment_id:', paymentId);
+      console.log('Starting payment status polling for payment_id:', paymentId);
       intervalId = setInterval(async () => {
         try {
-          console.log('🔍 Checking payment status...');
+          console.log('Checking payment status...');
           const payments = await djangoAPI.getUserPayments();
           const currentPayment = payments.payments.find(p => p.id === paymentId);
 
           if (currentPayment) {
-            console.log('📊 Current payment status:', currentPayment.status);
+            console.log('Current payment status:', currentPayment.status);
             if (currentPayment.status === 'completed') {
-              console.log('✅ Payment completed! Calling handlePaymentSuccess');
+              console.log('Payment completed! Calling handlePaymentSuccess');
               setPaymentStatus('completed');
               handlePaymentSuccess();
               clearInterval(intervalId);
             } else if (currentPayment.status === 'failed') {
-              console.log('❌ Payment failed');
+              console.log('Payment failed');
               setPaymentStatus('failed');
               toast.error('Payment failed. Please try again.');
               clearInterval(intervalId);
             } else {
-              console.log('⏳ Payment still pending');
+              console.log('Payment still pending');
             }
           } else {
-            console.log('❓ Payment not found in response');
+            console.log('Payment not found in response');
           }
         } catch (error) {
-          console.error('💥 Error checking payment status:', error);
+          console.error('Error checking payment status:', error);
         }
       }, 3000); // Check every 3 seconds
     }
 
     return () => {
       if (intervalId) {
-        console.log('🛑 Clearing payment polling interval');
+        console.log('Clearing payment polling interval');
         clearInterval(intervalId);
       }
     };
@@ -74,21 +74,21 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('🚀 PAYMENT FORM SUBMITTED');
+    console.log('PAYMENT FORM SUBMITTED');
 
     if (!phoneNumber.trim()) {
-      console.log('❌ No phone number entered');
+      console.log('No phone number entered');
       toast.error('Please enter your phone number');
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      console.log('❌ Invalid phone number format:', phoneNumber);
+      console.log('Invalid phone number format:', phoneNumber);
       toast.error('Please enter a valid Kenyan phone number (254XXXXXXXXX)');
       return;
     }
 
-    console.log('✅ Phone number valid, initiating payment...');
+    console.log('Phone number valid, initiating payment...');
     setIsLoading(true);
     setPaymentStatus('pending');
 
@@ -101,32 +101,32 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
         house_id: house.id
       };
 
-      console.log('📤 Sending payment data:', paymentData);
+      console.log('Sending payment data:', paymentData);
       const response = await djangoAPI.initiatePayment(paymentData);
-      console.log('📥 Payment API response:', response);
+      console.log('Payment API response:', response);
 
       if (response.payment_id) {
-        console.log('✅ Payment initiated successfully, payment_id:', response.payment_id);
+        console.log('Payment initiated successfully, payment_id:', response.payment_id);
         setPaymentId(response.payment_id);
         toast.success('STK Push sent! Please check your phone and enter M-Pesa PIN to complete payment.');
 
         // For development: Automatically simulate payment success after 5 seconds
-        console.log('🎭 Development mode: Simulating payment success in 5 seconds...');
+        console.log('Development mode: Simulating payment success in 5 seconds...');
         setTimeout(async () => {
           try {
-            console.log('🎭 Calling simulate payment success...');
+            console.log('Calling simulate payment success...');
             await djangoAPI.simulatePaymentSuccess(response.payment_id);
-            console.log('🎭 Payment simulation completed');
+            console.log('Payment simulation completed');
           } catch (error) {
-            console.error('🎭 Payment simulation failed:', error);
+            console.error('Payment simulation failed:', error);
           }
         }, 5000);
       } else {
-        console.log('❌ No payment_id in response');
+        console.log('No payment_id in response');
         throw new Error('Failed to initiate payment');
       }
     } catch (error) {
-      console.error('💥 Payment initiation failed:', error);
+      console.error('Payment initiation failed:', error);
       setIsLoading(false);
       setPaymentStatus(null);
       toast.error('Failed to initiate payment. Please try again.');

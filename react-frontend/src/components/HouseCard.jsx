@@ -270,8 +270,8 @@ function HouseCard({
 
   const handlePaymentClick = useCallback((e) => {
     e.stopPropagation();
-    console.log('🎯 UNLOCK BUTTON CLICKED! Setting showPaymentModal to true');
-    console.log('🎯 Current state - showPaymentModal:', showPaymentModal, 'userType:', userType);
+    console.log('UNLOCK BUTTON CLICKED! Setting showPaymentModal to true');
+    console.log('Current state - showPaymentModal:', showPaymentModal, 'userType:', userType);
     setShowPaymentModal(true);
   }, [showPaymentModal, userType]);
 

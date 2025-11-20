@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { djangoAPI } from '../services/djangoAPI';
 import { toast } from 'react-hot-toast';
 import {
@@ -32,6 +33,7 @@ import '../pages/LandlordDashboard.css'; // Reuse the same CSS for consistency
 
 function AdminPage() {
   const { logout, currentUser } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
 
   // State management
   const [pendingHouses, setPendingHouses] = useState([]);
@@ -41,7 +43,6 @@ function AdminPage() {
   const [filteredHouses, setFilteredHouses] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('pending');
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,26 +50,6 @@ function AdminPage() {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
 
-  // Theme handling
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-    if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    } else {
-      setIsDarkMode(prefersDark);
-    }
-
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
-
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', newTheme ? 'dark' : 'light');
-  };
 
   // Data fetching
   const fetchPendingHouses = useCallback(async () => {

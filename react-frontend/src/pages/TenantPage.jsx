@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { djangoAPI } from '../services/djangoAPI';
 import {
   Search,
@@ -39,10 +40,10 @@ import Logo from '../components/Logo';
 
 function TenantPage() {
   const { logout, currentUser, userPreferences, userRecommendations, updateUserRecommendations } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [houses, setHouses] = useState([]);
   const [filteredHouses, setFilteredHouses] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [tenantLocation, setTenantLocation] = useState('');
   const [showChatbot, setShowChatbot] = useState(false);
@@ -58,19 +59,6 @@ function TenantPage() {
   const [favoriteHouses, setFavoriteHouses] = useState(new Set());
   const [showFavorites, setShowFavorites] = useState(false);
 
-  // Enhanced theme handling
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    } else {
-      setIsDarkMode(prefersDark);
-    }
-    
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
 
   // Enhanced house fetching with loading states
   useEffect(() => {
@@ -298,13 +286,6 @@ function TenantPage() {
     return () => clearInterval(interval);
   }, [currentUser, houses]);
 
-  // Enhanced theme toggle
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', newTheme ? 'dark' : 'light');
-  };
 
   // Enhanced logout
   const handleLogout = async () => {

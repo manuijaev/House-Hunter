@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Search, 
-  LogIn, 
-  UserPlus, 
-  Home as HomeIcon, 
-  MapPin, 
-  Lock, 
+import {
+  Search,
+  LogIn,
+  UserPlus,
+  Home as HomeIcon,
+  MapPin,
+  Lock,
   User,
   Star,
   Shield,
@@ -26,9 +26,12 @@ import {
   Users,
   ChevronDown,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { djangoAPI } from '../services/djangoAPI';
+import { useTheme } from '../contexts/ThemeContext';
 import HouseCard from '../components/HouseCard';
 import backgroundImage from '../assets/landingpage.jpg';
 import './LandingPage.css';
@@ -36,19 +39,17 @@ import Logo from '../components/Logo';
 
 function LandingPage() {
   const navigate = useNavigate();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [houses, setHouses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredHouses, setFilteredHouses] = useState([]);
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
   useEffect(() => {
     fetchApprovedHouses();
-    // Set dark mode by default for consistency
-    document.documentElement.setAttribute('data-theme', 'dark');
   }, []);
 
   useEffect(() => {
@@ -134,7 +135,7 @@ function LandingPage() {
   };
 
   return (
-    <div className="landing-page dynamic-theme dark">
+    <div className={`landing-page dynamic-theme ${isDarkMode ? 'dark' : 'light'}`}>
       {/* Enhanced Background */}
       <div className="background-overlay">
         <div 
@@ -182,6 +183,15 @@ function LandingPage() {
           </nav>
 
           <div className="header-actions">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="theme-toggle-btn dynamic-btn icon-btn"
+              title={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+            >
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+
             <button onClick={handleLogin} className="header-btn login dynamic-btn secondary-btn">
               <LogIn size={20} />
               <span>Login</span>
@@ -193,7 +203,7 @@ function LandingPage() {
             </button>
 
             {/* Mobile Menu Toggle */}
-            <button 
+            <button
               className="mobile-menu-toggle dynamic-btn icon-btn"
               onClick={() => setShowMobileMenu(!showMobileMenu)}
             >
@@ -423,7 +433,7 @@ function LandingPage() {
                         userType="tenant"
                         onPayment={handlePayment}
                         onChat={handleChat}
-                        isDarkMode={true}
+                        isDarkMode={isDarkMode}
                         isFeatured={house.isFeatured}
                         isNew={house.isNew}
                       />

@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { Toaster } from 'react-hot-toast';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -63,23 +64,34 @@ function AppRoutes() {
   );
 }
 
+function ThemedToaster() {
+  const { isDarkMode } = useTheme();
+
+  return (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 2000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#000000',
+          border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+        },
+      }}
+    />
+  );
+}
+
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppRoutes />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 2000,
-            style: {
-              background: '#333',
-              color: '#fff',
-            },
-          }}
-        />
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+          <ThemedToaster />
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

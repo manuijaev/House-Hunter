@@ -1,6 +1,7 @@
 // src/pages/LandlordDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { clearAllImagesFromLocalStorage } from '../utils/LocalStorage';
 import {
   Plus,
@@ -46,6 +47,7 @@ import Logo from '../components/Logo';
 
 function LandlordDashboard() {
   const { logout, currentUser } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
 
   // Firebase houses (real-time for landlord)
   const [houses, setHouses] = useState([]);
@@ -56,7 +58,6 @@ function LandlordDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHouse, setEditingHouse] = useState(null);
   const [activeTab, setActiveTab] = useState('houses');
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
   const [showDropdown, setShowDropdown] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -65,29 +66,6 @@ function LandlordDashboard() {
   const [vacancyFilter, setVacancyFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  // ----------------------------------------------------------------------
-  // Enhanced Theme handling with dynamic CSS classes
-  // ----------------------------------------------------------------------
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme) {
-      setIsDarkMode(savedTheme === 'dark');
-    } else {
-      setIsDarkMode(prefersDark);
-    }
-    
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
-
-  const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', newTheme ? 'dark' : 'light');
-  };
 
   // ----------------------------------------------------------------------
   // Dynamic Data Fetching with Enhanced Error Handling
@@ -294,14 +272,13 @@ function LandlordDashboard() {
 
       setHouses(prev => [...prev, newHouse]);
 
-      toast.success('🏠 Property added successfully! Awaiting admin approval.', {
+      toast.success('Property added successfully! Awaiting admin approval.', {
         duration: 5000,
-        icon: '🎉'
       });
       setShowAddModal(false);
     } catch (error) {
       console.error('Error adding house:', error);
-      toast.error('❌ Failed to add property: ' + (error?.message || ''));
+      toast.error('Failed to add property: ' + (error?.message || ''));
     }
   };
 
@@ -339,18 +316,17 @@ function LandlordDashboard() {
 
       toast.success('✨ Property updated successfully!', {
         duration: 4000,
-        icon: '✅'
       });
       setEditingHouse(null);
       setShowAddModal(false);
     } catch (error) {
       console.error('Error updating house:', error);
-      toast.error('❌ Failed to update property: ' + (error?.message || ''));
+      toast.error('Failed to update property: ' + (error?.message || ''));
     }
   };
 
   const handleDeleteHouse = async (houseId) => {
-    if (!window.confirm('🚨 Are you sure you want to delete this property? This action cannot be undone.')) return;
+    if (!window.confirm('Are you sure you want to delete this property? This action cannot be undone.')) return;
 
     try {
       try {
@@ -361,13 +337,12 @@ function LandlordDashboard() {
 
       setHouses(prev => prev.filter(h => String(h.id) !== String(houseId)));
 
-      toast.success('🗑️ Property deleted successfully!', {
+      toast.success('Property deleted successfully!', {
         duration: 4000,
-        icon: '✅'
       });
     } catch (error) {
       console.error('Error deleting house:', error);
-      toast.error('❌ Failed to delete property: ' + (error?.message || ''));
+      toast.error('Failed to delete property: ' + (error?.message || ''));
     }
   };
 
@@ -392,12 +367,12 @@ function LandlordDashboard() {
       setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
 
       toast.success(
-        isVacant ? '🟢 Property marked as vacant' : '🔴 Property marked as occupied',
+        isVacant ? 'Property marked as vacant' : 'Property marked as occupied',
         { duration: 3000 }
       );
     } catch (err) {
       console.error('Vacancy toggle error:', err);
-      toast.error('❌ Failed to update vacancy status: ' + (err?.message || ''));
+      toast.error('Failed to update vacancy status: ' + (err?.message || ''));
     }
   };
 
