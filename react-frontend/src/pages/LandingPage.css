@@ -415,17 +415,102 @@ div.landing-page {
 
 /* Enhanced Hero Stats */
 .hero-stats {
-  display: flex;
+  display: flex !important;
   justify-content: center;
-  gap: 3rem;
+  align-items: stretch;
+  gap: 2rem;
   margin-bottom: 3rem;
   flex-wrap: wrap;
   color: #e0e0e0 !important; /* Light gray for visibility */
+  width: 100%;
+  flex-direction: row !important;
+}
+
+/* Hero Search Section */
+.hero-search-section {
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 600px;
+}
+
+.hero-search-container {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+}
+
+.search-input-wrapper {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.location-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #e0e0e0;
+  z-index: 2;
+}
+
+.location-search-input {
+  width: 100%;
+  padding: 1rem 3rem 1rem 3rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 1rem;
+  outline: none;
+  backdrop-filter: blur(5px);
+}
+
+.location-search-input::placeholder {
+  color: #e0e0e0;
+}
+
+.location-search-input:focus {
+  border-color: var(--text-accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.clear-location-search {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-location-search:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.location-search-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .hero-stat {
-  display: flex;
+  display: flex !important;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
   padding: 1.5rem;
   background: rgba(255, 255, 255, 0.1);
@@ -433,6 +518,10 @@ div.landing-page {
   border-radius: 16px;
   backdrop-filter: blur(10px);
   color: #ffffff !important;
+  flex: 1 1 200px;
+  min-width: 200px;
+  max-width: 300px;
+  box-sizing: border-box;
 }
 
 .stat-icon {
@@ -932,11 +1021,13 @@ div.landing-page {
 
   .hero-stats {
     gap: 1rem;
+    flex-direction: row !important;
   }
 
   .hero-stat {
-    flex: 1;
+    flex: 1 1 150px !important;
     min-width: 150px;
+    max-width: none;
   }
 
   .search-controls {

@@ -314,20 +314,27 @@ function HouseCard({
   const handleQuickView = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    // Only tenants should be able to expand cards and track views
-    if (userType === 'tenant' && houseData?.id) {
+
+    // For tenants, check authentication first
+    if (userType === 'tenant') {
+      if (!currentUser) {
+        // Redirect to login if not authenticated
+        navigate('/login');
+        toast.info('Please sign in to view property details');
+        return;
+      }
+
       // Track view for analytics
       const viewedHouses = JSON.parse(localStorage.getItem('viewed_houses') || '[]');
       if (!viewedHouses.includes(String(houseData.id))) {
         viewedHouses.push(String(houseData.id));
         localStorage.setItem('viewed_houses', JSON.stringify(viewedHouses));
-        
+
         // Increment view count for landlord analytics
         const viewKey = `house_views_${houseData.id}`;
         const currentViews = parseInt(localStorage.getItem(viewKey) || '0') + 1;
         localStorage.setItem(viewKey, String(currentViews));
-        
+
         // Send view event to backend if available
         try {
           djangoAPI.incrementHouseView(houseData.id);
@@ -335,7 +342,7 @@ function HouseCard({
           console.log('Failed to sync view count:', error);
         }
       }
-      
+
       setIsViewed(true);
       setIsExpanded(!isExpanded);
     }
@@ -343,7 +350,7 @@ function HouseCard({
     else if (userType === 'landlord') {
       setIsExpanded(!isExpanded);
     }
-  }, [isExpanded, houseData?.id, userType]);
+  }, [isExpanded, houseData?.id, userType, currentUser, navigate]);
 
   const handleCardClick = useCallback((e) => {
     // Don't expand if clicking on interactive elements
@@ -352,14 +359,21 @@ function HouseCard({
       return;
     }
 
-    // Only tenants should expand cards (except landlords in dev mode)
+    // For tenants, check if authenticated first
     if (userType === 'tenant') {
-      setIsExpanded(!isExpanded);
+      if (!currentUser) {
+        // Redirect to login if not authenticated
+        navigate('/login');
+        toast.info('Please sign in to view property details');
+        return;
+      }
+      // Open property details modal for authenticated tenants
+      setShowDetailsModal(true);
     } else if (userType === 'landlord') {
       // Let landlords expand but don't track as "viewed"
       setIsExpanded(!isExpanded);
     }
-  }, [isExpanded, userType]);
+  }, [isExpanded, userType, currentUser, navigate]);
 
   const handleVacancyToggle = useCallback(async (e) => {
     e?.stopPropagation();
@@ -476,7 +490,7 @@ function HouseCard({
         className={`house-card enhanced ${userType === 'tenant' ? 'compact-tenant-card' : ''} ${!isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''} ${isHovered ? 'hovered' : ''} ${isFavorite ? 'favorited' : ''} ${isExpanded ? 'expanded' : ''} ${isViewed ? 'viewed' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onClick={userType === 'tenant' ? () => setShowDetailsModal(true) : handleCardClick}
+        onClick={handleCardClick}
         style={{ animationDelay: `${animationDelay}s`, cursor: userType === 'tenant' ? 'pointer' : 'default' }}
       >
         {/* Enhanced Image Gallery Section */}

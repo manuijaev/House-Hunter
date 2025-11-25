@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import TenantPage from './pages/TenantPage';
 import LandlordPage from './pages/LandlordPage';
 import AdminPage from './pages/AdminPage';
+import AvailableHouses from './pages/AvailableHouses';
 import './App.css';
 
 function AppRoutes() {
@@ -22,6 +23,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/available-houses" element={<AvailableHouses />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

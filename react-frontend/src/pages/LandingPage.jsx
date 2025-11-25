@@ -30,9 +30,7 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { djangoAPI } from '../services/djangoAPI';
 import { useTheme } from '../contexts/ThemeContext';
-import HouseCard from '../components/HouseCard';
 import backgroundImage from '../assets/landingpage.jpg';
 import './LandingPage.css';
 import Logo from '../components/Logo';
@@ -40,59 +38,51 @@ import Logo from '../components/Logo';
 function LandingPage() {
   const navigate = useNavigate();
   const { isDarkMode, toggleTheme } = useTheme();
-  const [houses, setHouses] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredHouses, setFilteredHouses] = useState([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  const [searchLocation, setSearchLocation] = useState('');
+  const [animatedStats, setAnimatedStats] = useState({
+    properties: 0,
+    tenants: 0,
+    satisfaction: 0
+  });
 
+  // Dynamic stats animation
   useEffect(() => {
-    fetchApprovedHouses();
+    const targetStats = {
+      properties: 1000,
+      tenants: 10000,
+      satisfaction: 98
+    };
+
+    const duration = 2000; // 2 seconds
+    const steps = 60;
+    const increment = duration / steps;
+
+    let currentStep = 0;
+    const timer = setInterval(() => {
+      currentStep++;
+      const progress = currentStep / steps;
+
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+
+      setAnimatedStats({
+        properties: Math.floor(targetStats.properties * easeOutQuart),
+        tenants: Math.floor(targetStats.tenants * easeOutQuart),
+        satisfaction: Math.floor(targetStats.satisfaction * easeOutQuart)
+      });
+
+      if (currentStep >= steps) {
+        clearInterval(timer);
+        // Ensure final values are exact
+        setAnimatedStats(targetStats);
+      }
+    }, increment);
+
+    return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (searchTerm) {
-      const filtered = houses.filter(house =>
-        house.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        house.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        house.location?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredHouses(filtered);
-    } else {
-      setFilteredHouses(houses);
-    }
-  }, [searchTerm, houses]);
 
-  const fetchApprovedHouses = async () => {
-    setLoading(true);
-    try {
-      const housesData = await djangoAPI.getHouses();
-      const approvedHouses = (Array.isArray(housesData) ? housesData : []).filter(
-        house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
-      );
-      
-      // Enhance houses with dynamic properties
-      const enhancedHouses = approvedHouses.map(house => ({
-        ...house,
-        popularity: Math.floor(Math.random() * 100) + 1,
-        views: Math.floor(Math.random() * 1000) + 100,
-        rating: (Math.random() * 2 + 3).toFixed(1),
-        isFeatured: Math.random() > 0.7,
-        isNew: Date.now() - new Date(house.createdAt || house.created_at).getTime() < 7 * 24 * 60 * 60 * 1000
-      }));
-      
-      setHouses(enhancedHouses);
-      setFilteredHouses(enhancedHouses);
-    } catch (error) {
-      console.error('Error fetching houses:', error);
-      setHouses([]);
-      setFilteredHouses([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = () => {
     navigate('/login');
@@ -102,36 +92,27 @@ function LandingPage() {
     navigate('/login?mode=signup');
   };
 
-  const handlePayment = (house) => {
-    navigate(`/login?mode=signup&userType=tenant&houseId=${house.id}`);
-  };
-
-  const handleChat = (house) => {
-    navigate('/login');
-  };
-
-  const scrollToProperties = () => {
-    document.getElementById('properties-section').scrollIntoView({ 
-      behavior: 'smooth' 
-    });
-  };
 
   const scrollToFeatures = () => {
-    document.getElementById('features-section').scrollIntoView({ 
-      behavior: 'smooth' 
+    document.getElementById('features-section').scrollIntoView({
+      behavior: 'smooth'
     });
   };
 
-  // Enhanced analytics data
-  const analyticsData = {
-    totalProperties: houses.length,
-    affordableProperties: houses.filter(h => (h.monthlyRent || h.monthly_rent || 0) <= 30000).length,
-    luxuryProperties: houses.filter(h => (h.monthlyRent || h.monthly_rent || 0) >= 80000).length,
-    featuredProperties: houses.filter(h => h.isFeatured).length,
-    newProperties: houses.filter(h => h.isNew).length,
-    averagePrice: houses.length > 0 
-      ? Math.round(houses.reduce((sum, house) => sum + (house.monthlyRent || house.monthly_rent || 0), 0) / houses.length)
-      : 0
+  const handleLocationSearch = () => {
+    if (searchLocation.trim()) {
+      // Navigate to available houses page with search query
+      navigate(`/available-houses?search=${encodeURIComponent(searchLocation.trim())}`);
+    } else {
+      // Navigate to available houses page without search
+      navigate('/available-houses');
+    }
+  };
+
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleLocationSearch();
+    }
   };
 
   return (
@@ -169,16 +150,16 @@ function LandingPage() {
 
           {/* Desktop Navigation */}
           <nav className="desktop-nav">
-            <button onClick={scrollToProperties} className="nav-link">
-              <HomeIcon size={18} />
-              <span>Properties</span>
+            <button onClick={() => navigate('/available-houses')} className="nav-link">
+              <Building2 size={18} />
+              <span>Available Houses</span>
             </button>
             <button onClick={scrollToFeatures} className="nav-link">
               <Star size={18} />
               <span>Features</span>
             </button>
             <div className="nav-stats">
-              <span className="stat-badge">{houses.length}+ Listings</span>
+              <span className="stat-badge">1000+ Listings</span>
             </div>
           </nav>
 
@@ -215,16 +196,16 @@ function LandingPage() {
         {/* Mobile Navigation */}
         {showMobileMenu && (
           <div className="mobile-nav glass-effect">
-            <button onClick={scrollToProperties} className="mobile-nav-link">
-              <HomeIcon size={20} />
-              <span>Properties</span>
+            <button onClick={() => navigate('/available-houses')} className="mobile-nav-link">
+              <Building2 size={20} />
+              <span>Available Houses</span>
             </button>
             <button onClick={scrollToFeatures} className="mobile-nav-link">
               <Star size={20} />
               <span>Features</span>
             </button>
             <div className="mobile-stats">
-              <span>{houses.length}+ Active Listings</span>
+              <span>1000+ Active Listings</span>
             </div>
           </div>
         )}
@@ -235,127 +216,134 @@ function LandingPage() {
         {/* Hero Section */}
         <section className="hero-section">
           <div className="hero-content">
-            <div className="hero-badge dynamic-card">
-              <Sparkles size={16} />
-              <span>Kenya's #1 Property Platform</span>
-            </div>
-            
-            <h1 className="hero-title">
-              Find Your
-              <span className="gradient-text"> Dream Home</span>
-              <br />
-              in Minutes
-            </h1>
-            
-            <p className="hero-subtitle">
-              Discover thousands of verified properties, connect with trusted landlords, 
-              and secure your perfect home with our AI-powered platform.
-            </p>
-
-            {/* Enhanced Quick Stats */}
-            <div className="hero-stats">
-              <div className="hero-stat">
-                <div className="stat-icon">
-                  <Building2 size={24} />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-number">{analyticsData.totalProperties}+</span>
-                  <span className="stat-label">Properties</span>
-                </div>
-              </div>
-              <div className="hero-stat">
-                <div className="stat-icon">
-                  <Users size={24} />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-number">10K+</span>
-                  <span className="stat-label">Happy Tenants</span>
-                </div>
-              </div>
-              <div className="hero-stat">
-                <div className="stat-icon">
-                  <Award size={24} />
-                </div>
-                <div className="stat-content">
-                  <span className="stat-number">98%</span>
-                  <span className="stat-label">Satisfaction</span>
-                </div>
+            {/* Hero Badge - Animated Entry */}
+            <div className="hero-badge-container" style={{ animationDelay: '0.2s' }}>
+              <div className="hero-badge dynamic-card">
+                <Sparkles size={16} />
+                <span>Kenya's #1 Property Platform</span>
               </div>
             </div>
 
-            {/* Enhanced Search */}
-            <div className="hero-search dynamic-card">
-              <div className="search-header">
-                <h3>Find Your Perfect Home</h3>
-                <p>Search by location, price, or property type</p>
+            {/* Main Headline - Staggered Animation */}
+            <div className="hero-headline" style={{ animationDelay: '0.4s' }}>
+              <h1 className="hero-title">
+                Find Your
+                <span className="gradient-text"> Dream Home</span>
+                <br />
+                in Minutes
+              </h1>
+            </div>
+
+            {/* Hero Description - Delayed Entry */}
+            <div className="hero-description" style={{ animationDelay: '0.6s' }}>
+              <p className="hero-subtitle">
+                Discover thousands of verified properties, connect with trusted landlords,
+                and secure your perfect home with our AI-powered platform.
+              </p>
+            </div>
+
+            {/* Social Proof Stats - Dynamic Grid Layout */}
+            <div className="hero-stats-section" style={{ animationDelay: '0.8s' }}>
+              <div className="hero-stats">
+                <div
+                  className="hero-stat stat-properties"
+                  style={{ animationDelay: '0.9s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <div className="stat-icon pulse">
+                    <Building2 size={24} />
+                  </div>
+                  <div className="stat-content">
+                    <span className="stat-number count-up">
+                      {animatedStats.properties.toLocaleString()}+
+                    </span>
+                    <span className="stat-label">Properties</span>
+                  </div>
+                  <div className="stat-glow"></div>
+                </div>
+
+                <div
+                  className="hero-stat stat-tenants"
+                  style={{ animationDelay: '1.0s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <div className="stat-icon bounce">
+                    <Users size={24} />
+                  </div>
+                  <div className="stat-content">
+                    <span className="stat-number count-up">
+                      {(animatedStats.tenants / 1000).toFixed(0)}K+
+                    </span>
+                    <span className="stat-label">Happy Tenants</span>
+                  </div>
+                  <div className="stat-glow"></div>
+                </div>
+
+                <div
+                  className="hero-stat stat-satisfaction"
+                  style={{ animationDelay: '1.1s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <div className="stat-icon sparkle">
+                    <Award size={24} />
+                  </div>
+                  <div className="stat-content">
+                    <span className="stat-number count-up">
+                      {animatedStats.satisfaction}%
+                    </span>
+                    <span className="stat-label">Satisfaction</span>
+                  </div>
+                  <div className="stat-glow"></div>
+                </div>
               </div>
-              <div className="search-controls">
-                <div className="search-box dynamic-input">
-                  <Search size={24} className="search-icon" />
+            </div>
+
+            {/* Location Search Bar */}
+            <div className="hero-search-section" style={{ animationDelay: '1.0s' }}>
+              <div className="hero-search-container dynamic-card">
+                <div className="search-input-wrapper">
+                  <MapPin size={20} className="location-icon" />
                   <input
                     type="text"
-                    placeholder="Enter location, title, or description..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="search-input"
+                    placeholder="Enter location (e.g., Nairobi, Westlands, Karen)..."
+                    value={searchLocation}
+                    onChange={(e) => setSearchLocation(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="location-search-input"
                   />
-                  {searchTerm && (
-                    <button 
-                      onClick={() => setSearchTerm('')} 
-                      className="clear-search"
+                  {searchLocation && (
+                    <button
+                      onClick={() => setSearchLocation('')}
+                      className="clear-location-search"
                     >
                       <X size={16} />
                     </button>
                   )}
                 </div>
-                <button 
-                  onClick={scrollToProperties}
-                  className="search-action dynamic-btn primary-btn"
+                <button
+                  onClick={handleLocationSearch}
+                  className="location-search-btn dynamic-btn primary-btn"
                 >
-                  <Search size={20} />
-                  <span>Explore Properties</span>
-                </button>
-              </div>
-              
-              {/* Quick Filters */}
-              <div className="quick-filters">
-                <button 
-                  onClick={() => setActiveFilter('all')}
-                  className={`filter-tag ${activeFilter === 'all' ? 'active' : ''}`}
-                >
-                  All Properties
-                </button>
-                <button 
-                  onClick={() => setActiveFilter('featured')}
-                  className={`filter-tag ${activeFilter === 'featured' ? 'active' : ''}`}
-                >
-                  <Star size={14} />
-                  Featured
-                </button>
-                <button 
-                  onClick={() => setActiveFilter('affordable')}
-                  className={`filter-tag ${activeFilter === 'affordable' ? 'active' : ''}`}
-                >
-                  <DollarSign size={14} />
-                  Affordable
-                </button>
-                <button 
-                  onClick={() => setActiveFilter('luxury')}
-                  className={`filter-tag ${activeFilter === 'luxury' ? 'active' : ''}`}
-                >
-                  <Crown size={14} />
-                  Luxury
+                  <Search size={18} />
+                  <span>Find Properties</span>
                 </button>
               </div>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="hero-actions">
+            {/* Primary CTA - Pulsing Effect */}
+            <div className="hero-cta-primary" style={{ animationDelay: '1.2s' }}>
               <button onClick={handleSignup} className="cta-primary dynamic-btn accent-btn large">
                 <Sparkles size={20} />
                 <span>Start Your Search</span>
                 <ArrowRight size={18} />
               </button>
+            </div>
+
+            {/* Secondary Actions - Fade In */}
+            <div className="hero-secondary-actions" style={{ animationDelay: '1.4s' }}>
               <button onClick={scrollToFeatures} className="cta-secondary dynamic-btn outline-btn">
                 <PlayCircle size={20} />
                 <span>Learn More</span>
@@ -363,124 +351,13 @@ function LandingPage() {
             </div>
           </div>
 
-          {/* Scroll Indicator */}
-          <div className="scroll-indicator">
+          {/* Scroll Indicator - Continuous Animation */}
+          <div className="scroll-indicator" style={{ animationDelay: '1.6s' }}>
             <span>Scroll to Explore</span>
             <ChevronDown size={20} className="bounce" />
           </div>
         </section>
 
-        {/* Enhanced Properties Section */}
-        <section id="properties-section" className="properties-section">
-          <div className="section-container">
-            <div className="section-header dynamic-card">
-              <div className="header-content">
-                <h2 className="dynamic-gradient-text">
-                  Featured Properties
-                </h2>
-                <p className="section-subtitle">
-                  Handpicked selection of premium homes and apartments
-                </p>
-                
-                {/* Properties Stats */}
-                <div className="properties-stats">
-                  <div className="stat-item">
-                    <span className="stat-value">{analyticsData.totalProperties}</span>
-                    <span className="stat-label">Total</span>
-                  </div>
-                  <div className="stat-item">
-                    <span className="stat-value">{analyticsData.featuredProperties}</span>
-                    <span className="stat-label">Featured</span>
-                  </div>
-                  <div className="stat-item">
-                    <span className="stat-value">{analyticsData.newProperties}</span>
-                    <span className="stat-label">New Today</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sort Controls */}
-              <div className="sort-controls">
-                <select 
-                  value={sortBy} 
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="sort-select dynamic-input"
-                >
-                  <option value="newest">Newest First</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                  <option value="popularity">Most Popular</option>
-                </select>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="loading-container dynamic-card">
-                <div className="loading-spinner"></div>
-                <p>Discovering amazing properties for you...</p>
-              </div>
-            ) : (
-              <>
-                <div className="houses-grid">
-                  {filteredHouses.map((house, index) => (
-                    <div 
-                      key={house.id} 
-                      className="house-card-wrapper"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <HouseCard
-                        house={house}
-                        userType="tenant"
-                        onPayment={handlePayment}
-                        onChat={handleChat}
-                        isDarkMode={isDarkMode}
-                        isFeatured={house.isFeatured}
-                        isNew={house.isNew}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {filteredHouses.length === 0 && !loading && (
-                  <div className="no-houses dynamic-card">
-                    <div className="empty-state">
-                      <HomeIcon size={80} className="empty-icon" />
-                      <h3>No Properties Found</h3>
-                      <p>
-                        {searchTerm 
-                          ? `No results for "${searchTerm}". Try different keywords or browse all properties.`
-                          : 'No houses available at the moment. Please check back later.'
-                        }
-                      </p>
-                      {searchTerm && (
-                        <button 
-                          onClick={() => setSearchTerm('')} 
-                          className="clear-search-btn dynamic-btn primary-btn"
-                        >
-                          Show All Properties
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Load More CTA */}
-                {filteredHouses.length > 0 && (
-                  <div className="load-more-section">
-                    <div className="cta-card dynamic-card accent">
-                      <h3>Ready to Find Your Dream Home?</h3>
-                      <p>Join thousands of happy tenants who found their perfect match</p>
-                      <button onClick={handleSignup} className="cta-btn dynamic-btn primary-btn large">
-                        <UserPlus size={20} />
-                        <span>Sign Up to View All Properties</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </section>
 
         {/* Enhanced Features Section */}
         <section id="features-section" className="features-section">
