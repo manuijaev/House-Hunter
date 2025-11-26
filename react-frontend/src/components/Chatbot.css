@@ -292,7 +292,7 @@
 }
 
 .message-text {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(166, 210, 252, 0.9);
   backdrop-filter: blur(10px);
   padding: 0.875rem 1.125rem;
   border-radius: 20px;
@@ -301,6 +301,7 @@
   word-wrap: break-word;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.3);
+
 
 }
 
@@ -312,7 +313,7 @@
 
 .chatbot-container.dark .message-text {
   background: rgba(45, 45, 45, 0.9);
-  color: #ffffff;
+  color: #141414;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 

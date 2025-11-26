@@ -16,6 +16,20 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.username} ({self.role})"
 
+class MessageBlock(models.Model):
+    """Blocks messaging between specific users"""
+    blocker = models.ForeignKey(User, on_delete=models.CASCADE, related_name='blocked_users')
+    blocked = models.ForeignKey(User, on_delete=models.CASCADE, related_name='blocked_by_users')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ['blocker', 'blocked']
+
+    def __str__(self):
+        return f"{self.blocker.username} blocked {self.blocked.username}"
+
+
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
@@ -23,6 +37,13 @@ class Message(models.Model):
     text = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+
+    # Moderation fields
+    is_flagged = models.BooleanField(default=False, help_text="Whether this message has been flagged for moderation")
+    flag_reason = models.TextField(blank=True, help_text="Reason why this message was flagged")
+    is_spam = models.BooleanField(default=False, help_text="Whether this message is detected as spam")
+    flagged_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='flagged_messages', help_text="Admin who flagged this message")
+    flagged_at = models.DateTimeField(null=True, blank=True, help_text="When this message was flagged")
 
     class Meta:
         ordering = ['timestamp']

@@ -10,7 +10,7 @@ from .serializers import HouseSerializer, MessageSerializer
 import requests
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import threading
 import time
@@ -464,6 +464,16 @@ def send_message(request):
         else:
             return Response({'error': 'Invalid user role'}, status=status.HTTP_403_FORBIDDEN)
 
+        # Check if messaging is blocked between these users
+        from .models import MessageBlock
+        block_exists = MessageBlock.objects.filter(
+            (Q(blocker=user) & Q(blocked=receiver)) |
+            (Q(blocker=receiver) & Q(blocked=user))
+        ).exists()
+
+        if block_exists:
+            return Response({'error': 'Messaging is blocked between these users'}, status=status.HTTP_403_FORBIDDEN)
+
         # Create message
         message_obj = Message.objects.create(
             sender=user,
@@ -624,6 +634,291 @@ def initiate_payment(request):
 
     except Exception as e:
         print(f"Payment initiation error: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def get_flagged_messages(request):
+    """Get all flagged messages for admin review"""
+    try:
+        flagged_messages = Message.objects.filter(
+            is_flagged=True
+        ).select_related('sender', 'receiver', 'house', 'flagged_by').order_by('-flagged_at')
+
+        messages_data = []
+        for msg in flagged_messages:
+            messages_data.append({
+                'id': msg.id,
+                'text': msg.text,
+                'sender': msg.sender.username,
+                'receiver': msg.receiver.username,
+                'house_id': msg.house.id,
+                'house_title': msg.house.title,
+                'timestamp': msg.timestamp.isoformat(),
+                'flag_reason': getattr(msg, 'flag_reason', ''),
+                'flagged_by': msg.flagged_by.username if msg.flagged_by else 'Unknown',
+                'flagged_at': msg.flagged_at.isoformat() if msg.flagged_at else None,
+            })
+
+        return Response({
+            'flagged_messages': messages_data,
+            'total_flagged': len(messages_data)
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Flagged messages error: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'Failed to fetch flagged messages: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def admin_chat_monitoring(request):
+    """Get all active conversations for admin monitoring"""
+    try:
+        from .models import MessageBlock
+        # Get recent conversations (messages from last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+
+        # Get all messages from the last 30 days
+        recent_messages = Message.objects.filter(
+            timestamp__gte=thirty_days_ago
+        ).select_related('sender', 'receiver', 'house').order_by('-timestamp')
+
+        # Group by house and user pairs
+        conversations = {}
+        total_conversations = 0
+
+        for msg in recent_messages:
+            # Create a unique key for each conversation
+            user_pair = tuple(sorted([msg.sender.id, msg.receiver.id]))
+            house_id = msg.house.id
+            conv_key = f"{house_id}_{user_pair[0]}_{user_pair[1]}"
+
+            if conv_key not in conversations:
+                # Determine online status based on last_seen activity (within last 5 minutes)
+                from django.utils import timezone
+                current_time = timezone.now()
+
+                def is_user_online(user):
+                    if user.last_seen:
+                        # Consider user online if active within last 5 minutes
+                        time_diff = current_time - user.last_seen
+                        return time_diff.total_seconds() < 300  # 5 minutes
+                    return False
+
+                conversations[conv_key] = {
+                    'house_id': house_id,
+                    'house_title': msg.house.title,
+                    'participants': [
+                        {
+                            'id': msg.sender.id,
+                            'username': msg.sender.username,
+                            'role': msg.sender.role,
+                            'is_banned': msg.sender.is_banned,
+                            'is_online': is_user_online(msg.sender),
+                            'messaging_blocked': False  # Will be updated below
+                        },
+                        {
+                            'id': msg.receiver.id,
+                            'username': msg.receiver.username,
+                            'role': msg.receiver.role,
+                            'is_banned': msg.receiver.is_banned,
+                            'is_online': is_user_online(msg.receiver),
+                            'messaging_blocked': False  # Will be updated below
+                        }
+                    ],
+                    'messages': [],
+                    'message_count': 0,
+                    'last_message': None,
+                    'flagged_messages': 0,
+                    'spam_messages': 0
+                }
+                total_conversations += 1
+
+            conv = conversations[conv_key]
+            conv['messages'].append({
+                'id': msg.id,
+                'text': msg.text,
+                'sender': msg.sender.username,
+                'receiver': msg.receiver.username,
+                'timestamp': msg.timestamp.isoformat(),
+                'is_flagged': False,  # Default until migration
+                'is_spam': False,     # Default until migration
+                'flag_reason': ''
+            })
+            conv['message_count'] += 1
+
+            # Update last message if this is more recent
+            if conv['last_message'] is None or msg.timestamp > conv['last_message']['timestamp_dt']:
+                conv['last_message'] = {
+                    'text': msg.text,
+                    'timestamp': msg.timestamp.isoformat(),
+                    'timestamp_dt': msg.timestamp,
+                    'sender': msg.sender.username
+                }
+
+        # Check messaging blocks for each conversation
+        for conv in conversations.values():
+            user1, user2 = conv['participants'][0]['id'], conv['participants'][1]['id']
+            # Check if there's a block between these users
+            block_exists = MessageBlock.objects.filter(
+                (Q(blocker_id=user1) & Q(blocked_id=user2)) |
+                (Q(blocker_id=user2) & Q(blocked_id=user1))
+            ).exists()
+
+            # Mark both participants as having blocked messaging if there's a block
+            for participant in conv['participants']:
+                participant['messaging_blocked'] = block_exists
+
+        # Convert to list and sort by most recent
+        conversation_list = list(conversations.values())
+        conversation_list.sort(key=lambda x: x['last_message']['timestamp_dt'] if x['last_message'] else datetime.min, reverse=True)
+
+        # Remove the timestamp_dt field from response
+        for conv in conversation_list:
+            if conv['last_message']:
+                del conv['last_message']['timestamp_dt']
+
+        return Response({
+            'conversations': conversation_list,
+            'total_conversations': total_conversations
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Chat monitoring error: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'Failed to fetch chat data: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def flag_message(request, message_id):
+    """Flag a message for moderation"""
+    try:
+        message = Message.objects.get(id=message_id)
+        reason = request.data.get('reason', '')
+
+        # Use setattr to handle fields that might not exist yet
+        setattr(message, 'is_flagged', True)
+        setattr(message, 'flag_reason', reason)
+        setattr(message, 'flagged_by', request.user)
+        setattr(message, 'flagged_at', datetime.now())
+        message.save()
+
+        return Response({
+            'message': 'Message flagged successfully',
+            'message_id': message_id
+        }, status=status.HTTP_200_OK)
+
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def unflag_message(request, message_id):
+    """Remove flag from a message"""
+    try:
+        message = Message.objects.get(id=message_id)
+
+        setattr(message, 'is_flagged', False)
+        setattr(message, 'flag_reason', '')
+        setattr(message, 'flagged_by', None)
+        setattr(message, 'flagged_at', None)
+        message.save()
+
+        return Response({
+            'message': 'Message unflagged successfully',
+            'message_id': message_id
+        }, status=status.HTTP_200_OK)
+
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def block_user_messaging(request, blocker_id, blocked_id):
+    """Block messaging between two specific users"""
+    try:
+        blocker = User.objects.get(id=blocker_id)
+        blocked = User.objects.get(id=blocked_id)
+
+        from .models import MessageBlock
+        block, created = MessageBlock.objects.get_or_create(
+            blocker=blocker,
+            blocked=blocked,
+            defaults={'reason': request.data.get('reason', 'Blocked by admin')}
+        )
+
+        action = "created" if created else "already exists"
+
+        return Response({
+            'message': f'Messaging block {action} between {blocker.username} and {blocked.username}',
+            'block_id': block.id,
+            'created': created
+        }, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist as e:
+        return Response({'error': f'User not found: {str(e)}'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def unblock_user_messaging(request, blocker_id, blocked_id):
+    """Unblock messaging between two specific users"""
+    try:
+        blocker = User.objects.get(id=blocker_id)
+        blocked = User.objects.get(id=blocked_id)
+
+        from .models import MessageBlock
+        # Delete the block in both directions
+        deleted_count = MessageBlock.objects.filter(
+            (Q(blocker=blocker) & Q(blocked=blocked)) |
+            (Q(blocker=blocked) & Q(blocked=blocker))
+        ).delete()
+
+        return Response({
+            'message': f'Messaging unblocked between {blocker.username} and {blocked.username}',
+            'deleted_count': deleted_count[0]
+        }, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist as e:
+        return Response({'error': f'User not found: {str(e)}'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAdmin])
+def delete_message(request, message_id):
+    """Delete a message"""
+    try:
+        message = Message.objects.get(id=message_id)
+        message.delete()
+
+        return Response({
+            'message': 'Message deleted successfully',
+            'message_id': message_id
+        }, status=status.HTTP_200_OK)
+
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1023,12 +1318,30 @@ def login(request):
 def get_user(request):
     """Get current logged-in user info"""
     user = request.user
+
+    # Update last_seen on user activity
+    from django.utils import timezone
+    user.last_seen = timezone.now()
+    user.save(update_fields=['last_seen'])
+
     return Response({
         'id': user.id,
         'username': user.username,
         'email': user.email,
         'role': user.role
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def user_heartbeat(request):
+    """Update user's last activity timestamp"""
+    user = request.user
+    from django.utils import timezone
+    user.last_seen = timezone.now()
+    user.save(update_fields=['last_seen'])
+
+    return Response({'status': 'ok'}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -1046,9 +1359,18 @@ def logout(request):
 @permission_classes([IsAdmin])
 def get_users(request):
     """Get all users (admin only)"""
+    from django.utils import timezone
     users = User.objects.all().order_by('-date_joined')
     user_data = []
+    now = timezone.now()
+
     for user in users:
+        # Calculate online status based on last_seen (within last 5 minutes)
+        is_online = False
+        if user.last_seen:
+            time_diff = (now - user.last_seen).total_seconds()
+            is_online = time_diff < 300  # 5 minutes = 300 seconds
+
         user_data.append({
             'id': user.id,
             'username': user.username,
@@ -1057,7 +1379,7 @@ def get_users(request):
             'date_joined': user.date_joined.isoformat(),
             'is_active': user.is_active,
             'is_banned': user.is_banned,
-            'is_online': user.is_online,
+            'is_online': is_online,
             'last_seen': user.last_seen.isoformat() if user.last_seen else None,
             'last_login': user.last_login.isoformat() if user.last_login else None
         })
@@ -1180,3 +1502,126 @@ def change_house_status(request, house_id):
         return Response({'message': f'House status changed to {new_status} successfully'}, status=status.HTTP_200_OK)
     except House.DoesNotExist:
         return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def admin_analytics(request):
+    """Get comprehensive analytics data for admin dashboard"""
+    from django.db.models import Count, Sum
+    from django.db.models.functions import TruncMonth, TruncDay
+    from datetime import datetime, timedelta
+
+    try:
+        # Revenue Analytics
+        total_revenue = Payment.objects.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+
+        # Monthly revenue trends (last 12 months)
+        twelve_months_ago = datetime.now() - timedelta(days=365)
+        monthly_revenue = Payment.objects.filter(
+            status='completed',
+            created_at__gte=twelve_months_ago
+        ).annotate(
+            month=TruncMonth('created_at')
+        ).values('month').annotate(
+            revenue=Sum('amount'),
+            transactions=Count('id')
+        ).order_by('month')
+
+        # User Statistics
+        total_users = User.objects.count()
+        total_tenants = User.objects.filter(role='tenant').count()
+        total_landlords = User.objects.filter(role='landlord').count()
+        total_admins = User.objects.filter(role='admin').count()
+
+        # User registration trends (last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        daily_registrations = User.objects.filter(
+            date_joined__gte=thirty_days_ago
+        ).annotate(
+            day=TruncDay('date_joined')
+        ).values('day').annotate(
+            count=Count('id')
+        ).order_by('day')
+
+        # House Statistics
+        total_houses = House.objects.count()
+        approved_houses = House.objects.filter(approval_status='approved').count()
+        pending_houses = House.objects.filter(approval_status='pending').count()
+        rejected_houses = House.objects.filter(approval_status='rejected').count()
+
+        # Popular Houses (by view count)
+        popular_houses = House.objects.filter(
+            approval_status='approved'
+        ).order_by('-view_count')[:10].values(
+            'id', 'title', 'view_count', 'landlord__username'
+        )
+
+        # Top Landlords (by number of approved houses)
+        top_landlords = User.objects.filter(
+            role='landlord'
+        ).annotate(
+            house_count=Count('house')
+        ).filter(
+            house__approval_status='approved'
+        ).order_by('-house_count')[:10].values(
+            'id', 'username', 'house_count'
+        )
+
+        # Payment Analytics
+        total_payments = Payment.objects.count()
+        successful_payments = Payment.objects.filter(status='completed').count()
+        failed_payments = Payment.objects.filter(status='failed').count()
+        pending_payments = Payment.objects.filter(status='pending').count()
+
+        success_rate = (successful_payments / total_payments * 100) if total_payments > 0 else 0
+
+        # Recent Activity (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_registrations = User.objects.filter(date_joined__gte=seven_days_ago).count()
+        recent_payments = Payment.objects.filter(created_at__gte=seven_days_ago).count()
+        recent_houses = House.objects.filter(created_at__gte=seven_days_ago).count()
+
+        analytics_data = {
+            'revenue': {
+                'total': total_revenue,
+                'monthly_trends': list(monthly_revenue),
+                'currency': 'KES'
+            },
+            'users': {
+                'total': total_users,
+                'tenants': total_tenants,
+                'landlords': total_landlords,
+                'admins': total_admins,
+                'daily_registrations': list(daily_registrations)
+            },
+            'houses': {
+                'total': total_houses,
+                'approved': approved_houses,
+                'pending': pending_houses,
+                'rejected': rejected_houses
+            },
+            'popular_houses': list(popular_houses),
+            'top_landlords': list(top_landlords),
+            'payments': {
+                'total': total_payments,
+                'successful': successful_payments,
+                'failed': failed_payments,
+                'pending': pending_payments,
+                'success_rate': round(success_rate, 2)
+            },
+            'recent_activity': {
+                'registrations': recent_registrations,
+                'payments': recent_payments,
+                'houses': recent_houses,
+                'period': '7 days'
+            }
+        }
+
+        return Response(analytics_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        return Response({'error': 'Failed to fetch analytics data'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

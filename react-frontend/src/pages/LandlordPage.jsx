@@ -630,7 +630,7 @@ function LandlordDashboard() {
                   <Home size={80} className="empty-icon" />
                   <h3>No Properties Found</h3>
                   <p>
-                    {searchQuery || statusFilter !== 'all' || vacancyFilter !== 'all' 
+                    {searchQuery || statusFilter !== 'all'
                       ? 'Try adjusting your search or filters'
                       : 'Start by adding your first property to get started'
                     }

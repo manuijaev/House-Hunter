@@ -25,7 +25,8 @@ import {
   Settings,
   AlertTriangle,
   RefreshCw,
-  Trash2
+  Trash2,
+  MessageCircle
 } from 'lucide-react';
 import HouseCard from '../components/HouseCard';
 import Logo from '../components/Logo';
@@ -40,15 +41,21 @@ function AdminPage() {
   const [rejectedHouses, setRejectedHouses] = useState([]);
   const [allHouses, setAllHouses] = useState([]);
   const [users, setUsers] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [filteredHouses, setFilteredHouses] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('pending');
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [chatData, setChatData] = useState(null);
+  const [flaggedMessages, setFlaggedMessages] = useState([]);
+  const [showFlaggedMessages, setShowFlaggedMessages] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
 
 
   // Data fetching
@@ -93,6 +100,51 @@ function AdminPage() {
     }
   }, []);
 
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      console.log('AdminPage: Starting analytics fetch...');
+      setAnalyticsLoading(true);
+      const data = await djangoAPI.getAdminAnalytics();
+      console.log('AdminPage: Analytics data received:', data);
+      setAnalytics(data);
+    } catch (error) {
+      console.error('AdminPage: Error fetching analytics:', error);
+      toast.error('Failed to load analytics data');
+      setAnalytics(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
+  const fetchChatData = useCallback(async () => {
+    try {
+      setChatLoading(true);
+      const data = await djangoAPI.getChatMonitoring();
+      setChatData(data);
+    } catch (error) {
+      console.error('Error fetching chat data:', error);
+      toast.error('Failed to load chat monitoring data');
+      setChatData(null);
+    } finally {
+      setChatLoading(false);
+    }
+  }, []);
+
+  const fetchFlaggedMessages = useCallback(async () => {
+    try {
+      setChatLoading(true);
+      const data = await djangoAPI.getFlaggedMessages();
+      setFlaggedMessages(data.flagged_messages || []);
+      toast.success(`Found ${data.total_flagged || 0} flagged messages`);
+    } catch (error) {
+      console.error('Error fetching flagged messages:', error);
+      toast.error('Failed to load flagged messages');
+      setFlaggedMessages([]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -101,6 +153,22 @@ function AdminPage() {
     };
     fetchData();
   }, [fetchPendingHouses, fetchRejectedHouses, fetchAllHouses, fetchUsers]);
+
+  // Fetch analytics when analytics tab is selected
+  useEffect(() => {
+    console.log('AdminPage: activeTab changed to:', activeTab);
+    if (activeTab === 'analytics' && !analytics) {
+      console.log('AdminPage: Fetching analytics data...');
+      fetchAnalytics();
+    }
+  }, [activeTab, analytics, fetchAnalytics]);
+
+  // Fetch chat data when chat moderation tab is selected
+  useEffect(() => {
+    if (activeTab === 'chat' && !chatData) {
+      fetchChatData();
+    }
+  }, [activeTab, chatData, fetchChatData]);
 
   // Filtering
   useEffect(() => {
@@ -220,6 +288,97 @@ function AdminPage() {
     }
   };
 
+  // Chat Moderation Handlers
+  const handleFlagMessage = async (messageId) => {
+    const reason = prompt('Enter reason for flagging this message:');
+    if (!reason) return;
+
+    try {
+      await djangoAPI.flagMessage(messageId, reason);
+      toast.success('Message flagged successfully');
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error flagging message:', error);
+      toast.error('Failed to flag message');
+    }
+  };
+
+  const handleUnflagMessage = async (messageId) => {
+    try {
+      await djangoAPI.unflagMessage(messageId);
+      // Remove the message from flaggedMessages state
+      setFlaggedMessages(prev => prev.filter(msg => msg.id !== messageId));
+      toast.success('Message unflagged successfully');
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error unflagging message:', error);
+      toast.error('Failed to unflag message');
+    }
+  };
+
+  const toggleFlaggedMessages = async () => {
+    if (!showFlaggedMessages) {
+      // Show flagged messages
+      await fetchFlaggedMessages();
+      setShowFlaggedMessages(true);
+    } else {
+      // Hide flagged messages
+      setShowFlaggedMessages(false);
+      setFlaggedMessages([]);
+    }
+  };
+
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!confirm('Are you sure you want to delete this message? This action cannot be undone.')) return;
+
+    try {
+      await djangoAPI.deleteMessage(messageId);
+      toast.success('Message deleted successfully');
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleBlockUser = async (blockerId, blockedId, blockerName, blockedName) => {
+    if (!confirm(`Are you sure you want to block messaging between ${blockerName} and ${blockedName}?`)) return;
+
+    try {
+      await djangoAPI.blockUserMessaging(blockerId, blockedId);
+      toast.success(`Messaging blocked between ${blockerName} and ${blockedName}`);
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error blocking messaging:', error);
+      toast.error('Failed to block messaging');
+    }
+  };
+
+  const handleUnblockMessaging = async (blockerId, blockedId, blockerName, blockedName) => {
+    if (!confirm(`Are you sure you want to unblock messaging between ${blockerName} and ${blockedName}?`)) return;
+
+    try {
+      await djangoAPI.unblockUserMessaging(blockerId, blockedId);
+      toast.success(`Messaging unblocked between ${blockerName} and ${blockedName}`);
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error unblocking messaging:', error);
+      toast.error('Failed to unblock messaging');
+    }
+  };
+
+  const handleUnblockUser = async (userId, username) => {
+    try {
+      await djangoAPI.unblockUserMessaging(userId);
+      toast.success(`${username} unblocked from messaging`);
+      fetchChatData(); // Refresh data
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+      toast.error('Failed to unblock user');
+    }
+  };
+
   // Analytics data
   const analyticsData = {
     totalHouses: allHouses.length,
@@ -253,7 +412,7 @@ function AdminPage() {
               className="theme-btn dynamic-btn icon-btn"
               title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
-              {isDarkMode ? <Sun size={22} /> : <Moon size={22} />}
+              {isDarkMode ? <Sun size={22} className="sun-icon" /> : <Moon size={22} className="moon-icon" />}
             </button>
 
             <div className="action-group">
@@ -341,6 +500,14 @@ function AdminPage() {
           >
             <BarChart3 size={20} />
             <span>Analytics</span>
+          </button>
+
+          <button
+            className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <MessageCircle size={20} />
+            <span>Chat Moderation</span>
           </button>
         </div>
       </div>
@@ -579,86 +746,473 @@ function AdminPage() {
         {/* Analytics Tab */}
         {activeTab === 'analytics' && (
           <div className="analytics-section dynamic-card">
+            {console.log('AdminPage: Rendering analytics tab, analytics data:', analytics)}
             <div className="section-header">
               <div className="header-info">
                 <h2 className="dynamic-gradient-text">System Analytics</h2>
                 <p className="section-subtitle">Comprehensive overview of the platform</p>
               </div>
-            </div>
 
-            <div className="analytics-grid">
-              <div className="stat-card primary">
-                <div className="stat-icon">
-                  <Home size={24} />
-                </div>
-                <h3>Total Houses</h3>
-                <p className="stat-number">{analyticsData.totalHouses}</p>
-                <p className="stat-trend">All listings</p>
-              </div>
-
-              <div className="stat-card warning">
-                <div className="stat-icon">
-                  <AlertTriangle size={24} />
-                </div>
-                <h3>Pending Approval</h3>
-                <p className="stat-number">{analyticsData.pendingHouses}</p>
-                <p className="stat-trend">Awaiting review</p>
-              </div>
-
-              <div className="stat-card success">
-                <div className="stat-icon">
-                  <CheckCircle size={24} />
-                </div>
-                <h3>Approved</h3>
-                <p className="stat-number">{analyticsData.approvedHouses}</p>
-                <p className="stat-trend">Active listings</p>
-              </div>
-
-              <div className="stat-card danger">
-                <div className="stat-icon">
-                  <XCircle size={24} />
-                </div>
-                <h3>Rejected</h3>
-                <p className="stat-number">{analyticsData.rejectedHouses}</p>
-                <p className="stat-trend">Not approved</p>
-              </div>
-
-              <div className="stat-card info">
-                <div className="stat-icon">
-                  <Users size={24} />
-                </div>
-                <h3>Total Users</h3>
-                <p className="stat-number">{analyticsData.totalUsers}</p>
-                <p className="stat-trend">All registered</p>
-              </div>
-
-              <div className="stat-card secondary">
-                <div className="stat-icon">
-                  <UserCheck size={24} />
-                </div>
-                <h3>Landlords</h3>
-                <p className="stat-number">{analyticsData.landlordUsers}</p>
-                <p className="stat-trend">Property owners</p>
-              </div>
-
-              <div className="stat-card accent">
-                <div className="stat-icon">
-                  <UserX size={24} />
-                </div>
-                <h3>Tenants</h3>
-                <p className="stat-number">{analyticsData.tenantUsers}</p>
-                <p className="stat-trend">Seeking housing</p>
-              </div>
-
-              <div className="stat-card primary">
-                <div className="stat-icon">
-                  <Shield size={24} />
-                </div>
-                <h3>Admins</h3>
-                <p className="stat-number">{analyticsData.adminUsers}</p>
-                <p className="stat-trend">System admins</p>
+              <div className="controls-panel">
+                <button
+                  onClick={() => fetchAnalytics()}
+                  className="refresh-btn dynamic-btn secondary-btn"
+                  disabled={analyticsLoading}
+                  title="Refresh analytics data"
+                >
+                  <RefreshCw size={16} className={analyticsLoading ? 'spinning' : ''} />
+                  <span>{analyticsLoading ? 'Loading...' : 'Refresh'}</span>
+                </button>
               </div>
             </div>
+
+            {analyticsLoading ? (
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <p>Loading analytics data...</p>
+              </div>
+            ) : analytics ? (
+              <>
+                {/* Revenue Section */}
+                <div className="analytics-subsection">
+                  <h3 className="subsection-title">
+                    <DollarSign size={20} />
+                    Revenue Analytics
+                  </h3>
+                  <div className="analytics-grid">
+                    <div className="stat-card success large">
+                      <div className="stat-icon">
+                        <DollarSign size={24} />
+                      </div>
+                      <h3>Total Revenue</h3>
+                      <p className="stat-number">KES {analytics.revenue?.total?.toLocaleString('en-KE') || '0'}</p>
+                      <p className="stat-trend">All time earnings</p>
+                    </div>
+
+                    <div className="stat-card info">
+                      <div className="stat-icon">
+                        <TrendingUp size={24} />
+                      </div>
+                      <h3>Payment Success Rate</h3>
+                      <p className="stat-number">{analytics.payments?.success_rate || 0}%</p>
+                      <p className="stat-trend">Transaction completion</p>
+                    </div>
+
+                    <div className="stat-card warning">
+                      <div className="stat-icon">
+                        <AlertTriangle size={24} />
+                      </div>
+                      <h3>Failed Payments</h3>
+                      <p className="stat-number">{analytics.payments?.failed || 0}</p>
+                      <p className="stat-trend">Need attention</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* User Statistics */}
+                <div className="analytics-subsection">
+                  <h3 className="subsection-title">
+                    <Users size={20} />
+                    User Statistics
+                  </h3>
+                  <div className="analytics-grid">
+                    <div className="stat-card primary">
+                      <div className="stat-icon">
+                        <Users size={24} />
+                      </div>
+                      <h3>Total Users</h3>
+                      <p className="stat-number">{analytics.users?.total || 0}</p>
+                      <p className="stat-trend">All registered</p>
+                    </div>
+
+                    <div className="stat-card secondary">
+                      <div className="stat-icon">
+                        <UserCheck size={24} />
+                      </div>
+                      <h3>Landlords</h3>
+                      <p className="stat-number">{analytics.users?.landlords || 0}</p>
+                      <p className="stat-trend">Property owners</p>
+                    </div>
+
+                    <div className="stat-card accent">
+                      <div className="stat-icon">
+                        <UserX size={24} />
+                      </div>
+                      <h3>Tenants</h3>
+                      <p className="stat-number">{analytics.users?.tenants || 0}</p>
+                      <p className="stat-trend">Seeking housing</p>
+                    </div>
+
+                    <div className="stat-card info">
+                      <div className="stat-icon">
+                        <Shield size={24} />
+                      </div>
+                      <h3>Admins</h3>
+                      <p className="stat-number">{analytics.users?.admins || 0}</p>
+                      <p className="stat-trend">System admins</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* House Statistics */}
+                <div className="analytics-subsection">
+                  <h3 className="subsection-title">
+                    <Home size={20} />
+                    House Statistics
+                  </h3>
+                  <div className="analytics-grid">
+                    <div className="stat-card primary">
+                      <div className="stat-icon">
+                        <Home size={24} />
+                      </div>
+                      <h3>Total Houses</h3>
+                      <p className="stat-number">{analytics.houses?.total || 0}</p>
+                      <p className="stat-trend">All listings</p>
+                    </div>
+
+                    <div className="stat-card success">
+                      <div className="stat-icon">
+                        <CheckCircle size={24} />
+                      </div>
+                      <h3>Approved</h3>
+                      <p className="stat-number">{analytics.houses?.approved || 0}</p>
+                      <p className="stat-trend">Active listings</p>
+                    </div>
+
+                    <div className="stat-card warning">
+                      <div className="stat-icon">
+                        <AlertTriangle size={24} />
+                      </div>
+                      <h3>Pending</h3>
+                      <p className="stat-number">{analytics.houses?.pending || 0}</p>
+                      <p className="stat-trend">Awaiting review</p>
+                    </div>
+
+                    <div className="stat-card danger">
+                      <div className="stat-icon">
+                        <XCircle size={24} />
+                      </div>
+                      <h3>Rejected</h3>
+                      <p className="stat-number">{analytics.houses?.rejected || 0}</p>
+                      <p className="stat-trend">Not approved</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="analytics-subsection">
+                  <h3 className="subsection-title">
+                    <Calendar size={20} />
+                    Recent Activity (Last 7 Days)
+                  </h3>
+                  <div className="analytics-grid">
+                    <div className="stat-card info">
+                      <div className="stat-icon">
+                        <Users size={24} />
+                      </div>
+                      <h3>New Registrations</h3>
+                      <p className="stat-number">{analytics.recent_activity?.registrations || 0}</p>
+                      <p className="stat-trend">New users</p>
+                    </div>
+
+                    <div className="stat-card success">
+                      <div className="stat-icon">
+                        <DollarSign size={24} />
+                      </div>
+                      <h3>Payments</h3>
+                      <p className="stat-number">{analytics.recent_activity?.payments || 0}</p>
+                      <p className="stat-trend">Transactions</p>
+                    </div>
+
+                    <div className="stat-card primary">
+                      <div className="stat-icon">
+                        <Home size={24} />
+                      </div>
+                      <h3>New Houses</h3>
+                      <p className="stat-number">{analytics.recent_activity?.houses || 0}</p>
+                      <p className="stat-trend">Listings added</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Lists */}
+                <div className="analytics-lists">
+                  <div className="list-section">
+                    <h3 className="list-title">
+                      <Eye size={20} />
+                      Most Popular Houses
+                    </h3>
+                    <div className="list-items">
+                      {analytics.popular_houses?.slice(0, 5).map((house, index) => (
+                        <div key={house.id} className="list-item">
+                          <span className="rank">#{index + 1}</span>
+                          <div className="item-info">
+                            <span className="item-title">{house.title}</span>
+                            <span className="item-meta">{house.view_count} views • {house.landlord__username}</span>
+                          </div>
+                        </div>
+                      )) || <p className="no-data">No data available</p>}
+                    </div>
+                  </div>
+
+                  <div className="list-section">
+                    <h3 className="list-title">
+                      <TrendingUp size={20} />
+                      Top Landlords
+                    </h3>
+                    <div className="list-items">
+                      {analytics.top_landlords?.slice(0, 5).map((landlord, index) => (
+                        <div key={landlord.id} className="list-item">
+                          <span className="rank">#{index + 1}</span>
+                          <div className="item-info">
+                            <span className="item-title">{landlord.username}</span>
+                            <span className="item-meta">{landlord.house_count} approved houses</span>
+                          </div>
+                        </div>
+                      )) || <p className="no-data">No data available</p>}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="no-analytics">
+                <BarChart3 size={64} />
+                <h3>No Analytics Data</h3>
+                <p>Unable to load analytics data. Please try refreshing.</p>
+                <button
+                  onClick={() => fetchAnalytics()}
+                  className="retry-btn dynamic-btn primary-btn"
+                >
+                  <RefreshCw size={16} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat Moderation Tab */}
+        {activeTab === 'chat' && (
+          <div className="analytics-section dynamic-card">
+            <div className="section-header">
+              <div className="header-info">
+                <h2 className="dynamic-gradient-text">Chat Moderation</h2>
+                <p className="section-subtitle">Monitor and moderate user conversations</p>
+              </div>
+
+              <div className="controls-panel">
+                <button
+                  onClick={toggleFlaggedMessages}
+                  className="flag-view-btn dynamic-btn warning-btn"
+                  disabled={chatLoading}
+                  title={showFlaggedMessages ? "Hide flagged messages" : "View all flagged messages"}
+                >
+                  <AlertTriangle size={16} />
+                  <span>{showFlaggedMessages ? "Hide Flagged Messages" : "View Flagged Messages"}</span>
+                </button>
+                <button
+                  onClick={() => fetchChatData()}
+                  className="refresh-btn dynamic-btn secondary-btn"
+                  disabled={chatLoading}
+                  title="Refresh chat data"
+                >
+                  <RefreshCw size={16} className={chatLoading ? 'spinning' : ''} />
+                  <span>{chatLoading ? 'Loading...' : 'Refresh'}</span>
+                </button>
+              </div>
+            </div>
+
+            {chatLoading ? (
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <p>Loading chat conversations...</p>
+              </div>
+            ) : chatData ? (
+              <>
+                <div className="chat-stats">
+                  <div className="stat-card primary">
+                    <div className="stat-icon">
+                      <MessageCircle size={24} />
+                    </div>
+                    <h3>Total Conversations</h3>
+                    <p className="stat-number">{chatData.total_conversations || 0}</p>
+                    <p className="stat-trend">Active in last 30 days</p>
+                  </div>
+                </div>
+
+                {/* Flagged Messages Section */}
+                {showFlaggedMessages && (
+                  <div className="flagged-messages-section">
+                    <h3 className="section-title">
+                      <AlertTriangle size={20} />
+                      Flagged Messages ({flaggedMessages.length})
+                    </h3>
+                    {flaggedMessages.length > 0 ? (
+                      <div className="flagged-messages-list">
+                        {flaggedMessages.map((message) => (
+                          <div key={message.id} className="flagged-message-card dynamic-card flagged">
+                            <div className="message-header">
+                              <div className="message-info">
+                                <span className="sender">{message.sender}</span>
+                                <span className="house">House: {message.house_title}</span>
+                                <span className="timestamp">{new Date(message.timestamp).toLocaleString()}</span>
+                              </div>
+                              <div className="message-actions">
+                                <button
+                                  className="action-btn unflag-btn"
+                                  onClick={() => handleUnflagMessage(message.id)}
+                                  title="Unflag message"
+                                >
+                                  Unflag
+                                </button>
+                              </div>
+                            </div>
+                            <div className="message-content">
+                              {message.text}
+                              {message.flag_reason && (
+                                <div className="flag-reason">
+                                  <small>Flag reason: {message.flag_reason}</small>
+                                </div>
+                              )}
+                              <div className="flag-info">
+                                <small>Flagged by: {message.flagged_by} on {new Date(message.flagged_at).toLocaleString()}</small>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-flagged-messages">
+                        <p>No flagged messages found.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="conversations-list">
+                  {chatData.conversations?.map((conversation, index) => (
+                    <div key={`${conversation.house_id}-${index}`} className="conversation-card dynamic-card">
+                      <div className="conversation-header">
+                        <div className="conversation-info">
+                          <h4>{conversation.house_title}</h4>
+                          <div className="participants">
+                            {conversation.participants.map((participant, idx) => (
+                              <span key={participant.id} className={`participant ${participant.role}`}>
+                                {participant.username} ({participant.role})
+                                {idx < conversation.participants.length - 1 && ' ↔ '}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="conversation-meta">
+                            <span>{conversation.message_count} messages</span>
+                            {conversation.flagged_messages > 0 && (
+                              <span className="flagged-count">{conversation.flagged_messages} flagged</span>
+                            )}
+                            {conversation.spam_messages > 0 && (
+                              <span className="spam-count">{conversation.spam_messages} spam</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="last-activity">
+                          <p className="last-message">
+                            <strong>{conversation.last_message.sender}:</strong> {conversation.last_message.text}
+                          </p>
+                          <span className="timestamp">
+                            {new Date(conversation.last_message.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="conversation-messages">
+                        {conversation.messages.map((message) => (
+                          <div key={message.id} className={`message-item ${message.is_flagged ? 'flagged' : ''} ${message.is_spam ? 'spam' : ''}`}>
+                            <div className="message-header">
+                              <span className="sender">{message.sender}</span>
+                              <span className="timestamp">{new Date(message.timestamp).toLocaleString()}</span>
+                              <div className="message-actions">
+                                {!message.is_flagged && !message.is_spam && (
+                                  <button
+                                    className="action-btn flag-btn"
+                                    onClick={() => handleFlagMessage(message.id)}
+                                    title="Flag message"
+                                  >
+                                    Flag
+                                  </button>
+                                )}
+                                {message.is_flagged && !message.is_spam && (
+                                  <button
+                                    className="action-btn unflag-btn"
+                                    onClick={() => handleUnflagMessage(message.id)}
+                                    title="Unflag message"
+                                  >
+                                    Unflag
+                                  </button>
+                                )}
+                                <button
+                                  className="action-btn delete-btn"
+                                  onClick={() => handleDeleteMessage(message.id)}
+                                  title="Delete message"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <div className="message-content">
+                              {message.text}
+                              {message.flag_reason && (
+                                <div className="flag-reason">
+                                  <small>Flag reason: {message.flag_reason}</small>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="conversation-actions">
+                        {conversation.participants.map((participant) => (
+                          <div key={participant.id} className="participant-actions">
+                            <span>{participant.username}</span>
+                            <button
+                              className={`action-btn ${participant.messaging_blocked ? 'unblock-btn' : 'block-btn'}`}
+                              onClick={() => participant.messaging_blocked ?
+                                handleUnblockMessaging(
+                                  conversation.participants.find(p => p.id !== participant.id)?.id,
+                                  participant.id,
+                                  conversation.participants.find(p => p.id !== participant.id)?.username,
+                                  participant.username
+                                ) :
+                                handleBlockUser(
+                                  conversation.participants.find(p => p.id !== participant.id)?.id,
+                                  participant.id,
+                                  conversation.participants.find(p => p.id !== participant.id)?.username,
+                                  participant.username
+                                )
+                              }
+                            >
+                              {participant.messaging_blocked ? 'Unblock' : 'Block User'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )) || <p className="no-data">No active conversations found</p>}
+                </div>
+              </>
+            ) : (
+              <div className="no-analytics">
+                <MessageCircle size={64} />
+                <h3>No Chat Data</h3>
+                <p>Unable to load chat monitoring data. Please try refreshing.</p>
+                <button
+                  onClick={() => fetchChatData()}
+                  className="retry-btn dynamic-btn primary-btn"
+                >
+                  <RefreshCw size={16} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

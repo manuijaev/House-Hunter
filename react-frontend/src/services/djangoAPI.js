@@ -227,6 +227,10 @@ export const djangoAPI = {
     return await makeApiCall('/auth/user/');
   },
 
+  heartbeat: async () => {
+    return await makeApiCall('/auth/heartbeat/', { method: 'POST' });
+  },
+
   logout: async () => {
     return await makeApiCall('/auth/logout/', { method: 'POST' });
   },
@@ -256,6 +260,63 @@ export const djangoAPI = {
 
   deleteOwnAccount: async () => {
     return await makeApiCall('/auth/delete-account/', { method: 'DELETE' });
+  },
+
+  // =============================
+  // ADMIN ANALYTICS ENDPOINTS
+  // =============================
+
+  getAdminAnalytics: async () => {
+    return await makeApiCall('/admin/analytics/');
+  },
+
+  // =============================
+  // ADMIN CHAT MODERATION ENDPOINTS
+  // =============================
+
+  getChatMonitoring: async () => {
+    return await makeApiCall('/admin/chat-monitoring/');
+  },
+
+  getFlaggedMessages: async () => {
+    return await makeApiCall('/admin/flagged-messages/');
+  },
+
+  flagMessage: async (messageId, reason = '') => {
+    return await makeApiCall(`/admin/messages/${messageId}/flag/`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  unflagMessage: async (messageId) => {
+    return await makeApiCall(`/admin/messages/${messageId}/unflag/`, {
+      method: 'POST'
+    });
+  },
+
+  markMessageAsSpam: async (messageId) => {
+    return await makeApiCall(`/admin/messages/${messageId}/spam/`, {
+      method: 'POST'
+    });
+  },
+
+  deleteMessage: async (messageId) => {
+    return await makeApiCall(`/admin/messages/${messageId}/delete/`, {
+      method: 'DELETE'
+    });
+  },
+
+  blockUserMessaging: async (userId) => {
+    return await makeApiCall(`/admin/users/${userId}/block-messaging/`, {
+      method: 'POST'
+    });
+  },
+
+  unblockUserMessaging: async (userId) => {
+    return await makeApiCall(`/admin/users/${userId}/unblock-messaging/`, {
+      method: 'POST'
+    });
   },
 
   // =============================
@@ -329,6 +390,14 @@ export const djangoAPI = {
     const params = new URLSearchParams();
     houseIds.forEach(id => params.append('house_ids[]', id));
     return await makeApiCall(`/favorites/valid/?${params.toString()}`);
+  },
+
+  blockUserMessaging: async (blockerId, blockedId) => {
+    return await makeApiCall(`/admin/users/${blockerId}/block-messaging/${blockedId}/`, { method: 'POST' });
+  },
+
+  unblockUserMessaging: async (blockerId, blockedId) => {
+    return await makeApiCall(`/admin/users/${blockerId}/unblock-messaging/${blockedId}/`, { method: 'POST' });
   },
 };
 

@@ -166,6 +166,27 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, [fetchUserData]);
 
+  // Heartbeat mechanism to update user activity
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        await djangoAPI.heartbeat();
+      } catch (error) {
+        console.warn('Heartbeat failed:', error);
+      }
+    };
+
+    // Send heartbeat every 2 minutes
+    const heartbeatInterval = setInterval(sendHeartbeat, 2 * 60 * 1000);
+
+    // Send initial heartbeat
+    sendHeartbeat();
+
+    return () => clearInterval(heartbeatInterval);
+  }, [currentUser]);
+
   const value = {
     currentUser,
     userType,

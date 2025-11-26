@@ -26,9 +26,21 @@ urlpatterns = [
 
     # User self-management endpoints
     path('auth/delete-account/', views.delete_own_account, name='delete_own_account'),
+    path('auth/heartbeat/', views.user_heartbeat, name='user_heartbeat'),
 
     # Admin endpoints
     path('admin/change-house-status/<int:house_id>/', views.change_house_status, name='change_house_status'),
+    path('admin/flagged-messages/', views.get_flagged_messages, name='flagged_messages'),
+    path('admin/analytics/', views.admin_analytics, name='admin_analytics'),
+
+    # Chat moderation endpoints
+    path('admin/chat-monitoring/', views.admin_chat_monitoring, name='admin_chat_monitoring'),
+    path('admin/messages/<int:message_id>/flag/', views.flag_message, name='flag_message'),
+    path('admin/messages/<int:message_id>/unflag/', views.unflag_message, name='unflag_message'),
+    path('admin/messages/<int:message_id>/delete/', views.delete_message, name='delete_message'),
+    path('admin/users/<int:blocker_id>/block-messaging/<int:blocked_id>/', views.block_user_messaging, name='block_user_messaging'),
+    path('admin/users/<int:blocker_id>/unblock-messaging/<int:blocked_id>/', views.unblock_user_messaging, name='unblock_user_messaging'),
+    path('admin/users/<int:user_id>/unblock-messaging/', views.unblock_user_messaging, name='unblock_user_messaging'),
 
     # Message endpoints
     path('messages/', views.MessageListCreateView.as_view(), name='message-list'),
