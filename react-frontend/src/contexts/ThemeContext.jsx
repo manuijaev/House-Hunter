@@ -11,7 +11,7 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   // Load theme from localStorage on mount
   useEffect(() => {
@@ -19,47 +19,39 @@ export const ThemeProvider = ({ children }) => {
     if (savedTheme) {
       setIsDarkMode(savedTheme === 'dark');
     } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDarkMode(prefersDark);
+      // Default to dark mode, or check system preference if user hasn't set it
+      setIsDarkMode(true);
     }
   }, []);
 
-  // Function to update theme based on current page
-  const updateThemeForCurrentPage = () => {
-    const isOnLandingPage = window.location.pathname === '/' || window.location.pathname === '/landing';
-
-    if (isOnLandingPage) {
-      if (isDarkMode) {
-        document.documentElement.classList.add('dark-theme');
-        document.documentElement.classList.remove('light-theme');
-      } else {
-        document.documentElement.classList.add('light-theme');
-        document.documentElement.classList.remove('dark-theme');
-      }
+  // Function to apply theme globally
+  const applyTheme = () => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark-theme');
+      document.documentElement.classList.remove('light-theme');
     } else {
-      // Remove theme classes from document root for other pages
-      document.documentElement.classList.remove('dark-theme', 'light-theme');
+      document.documentElement.classList.add('light-theme');
+      document.documentElement.classList.remove('dark-theme');
     }
   };
 
-  // Save theme to localStorage and apply/remove theme classes based on current page
+  // Save theme to localStorage and apply theme globally
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    updateThemeForCurrentPage();
+    applyTheme();
   }, [isDarkMode]);
 
   // Listen for navigation changes
   useEffect(() => {
     const handleNavigation = () => {
-      updateThemeForCurrentPage();
+      applyTheme();
     };
 
     // Listen for popstate events (browser back/forward)
     window.addEventListener('popstate', handleNavigation);
 
-    // Also check on initial load
-    updateThemeForCurrentPage();
+    // Also apply on initial load
+    applyTheme();
 
     return () => {
       window.removeEventListener('popstate', handleNavigation);

@@ -127,7 +127,7 @@ function AdminPage() {
     }
 
     setFilteredHouses(results);
-  }, [pendingHouses, allHouses, searchQuery, statusFilter, activeTab]);
+  }, [pendingHouses, rejectedHouses, allHouses, searchQuery, statusFilter, activeTab]);
 
   useEffect(() => {
     let results = users;
@@ -152,6 +152,7 @@ function AdminPage() {
       await djangoAPI.approveHouse(houseId);
       toast.success('House approved successfully!');
       fetchPendingHouses();
+      fetchRejectedHouses();
       fetchAllHouses();
     } catch (error) {
       console.error('Error approving house:', error);
@@ -164,6 +165,7 @@ function AdminPage() {
       await djangoAPI.rejectHouse(houseId);
       toast.success('House rejected successfully!');
       fetchPendingHouses();
+      fetchRejectedHouses();
       fetchAllHouses();
     } catch (error) {
       console.error('Error rejecting house:', error);
@@ -482,6 +484,15 @@ function AdminPage() {
                   <option value="landlord">Landlord</option>
                   <option value="tenant">Tenant</option>
                 </select>
+
+                <button
+                  onClick={() => fetchUsers()}
+                  className="refresh-btn dynamic-btn secondary-btn"
+                  title="Refresh users list"
+                >
+                  <RefreshCw size={16} />
+                  <span>Refresh</span>
+                </button>
               </div>
             </div>
 

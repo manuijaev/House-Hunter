@@ -119,7 +119,7 @@ function AvailableHouses() {
     try {
       const housesData = await djangoAPI.getHouses();
       const approvedHouses = (Array.isArray(housesData) ? housesData : []).filter(
-        house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
+        house => house.approval_status === 'approved'
       );
 
       // Enhance houses with dynamic properties
@@ -305,7 +305,7 @@ function AvailableHouses() {
               </div>
             </div>
 
-            {/* Sort Controls */}
+            {/* Sort Controls and Search Actions */}
             <div className="sort-controls">
               <select
                 value={sortBy}
@@ -317,6 +317,18 @@ function AvailableHouses() {
                 <option value="price-high">Price: High to Low</option>
                 <option value="popularity">Most Popular</option>
               </select>
+
+              {/* Show All Houses button when search is active */}
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="show-all-btn dynamic-btn primary-btn"
+                  title="Show all houses from all locations"
+                >
+                  <Building2 size={16} />
+                  <span>Show All Houses</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -362,14 +374,6 @@ function AvailableHouses() {
                         : 'No houses available at the moment. Please check back later.'
                       }
                     </p>
-                    {searchTerm && (
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className="clear-search-btn dynamic-btn primary-btn"
-                      >
-                        Show All Properties
-                      </button>
-                    )}
                   </div>
                 </div>
               )}

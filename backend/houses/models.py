@@ -117,7 +117,10 @@ class House(models.Model):
     contact_phone = models.CharField(max_length=15, blank=True)
     contact_email = models.EmailField(blank=True)
     exact_location = models.CharField(max_length=300, blank=True)
-    
+
+    # View tracking
+    view_count = models.PositiveIntegerField(default=0, help_text="Number of times this house has been viewed by tenants")
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

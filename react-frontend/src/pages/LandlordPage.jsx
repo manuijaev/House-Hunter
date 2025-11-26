@@ -63,7 +63,6 @@ function LandlordDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [vacancyFilter, setVacancyFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
 
@@ -134,12 +133,6 @@ function LandlordDashboard() {
       results = results.filter(house => house.approval_status === statusFilter);
     }
 
-    // Vacancy filter
-    if (vacancyFilter !== 'all') {
-      results = results.filter(house => 
-        vacancyFilter === 'vacant' ? house.isVacant : !house.isVacant
-      );
-    }
 
     // Sorting
     results = [...results].sort((a, b) => {
@@ -160,7 +153,7 @@ function LandlordDashboard() {
     });
 
     setFilteredHouses(results);
-  }, [houses, searchQuery, statusFilter, vacancyFilter, sortBy]);
+  }, [houses, searchQuery, statusFilter, sortBy]);
 
   // ----------------------------------------------------------------------
   // Enhanced Real-time Updates with Dynamic Notifications
@@ -346,43 +339,12 @@ function LandlordDashboard() {
     }
   };
 
-  const handleToggleVacancy = async (houseId, isVacant) => {
-    try {
-      const currentHouse = houses.find(h => String(h.id) === String(houseId));
-      if (!currentHouse) throw new Error('Property not found');
-
-      const updatePayload = { isVacant, is_vacant: isVacant };
-      if (isVacant && currentHouse.approval_status === 'approved') {
-        updatePayload.approval_status = 'pending';
-      }
-
-      // Optimistic update
-      setHouses(prev => prev.map(h =>
-        String(h.id) === String(houseId) 
-          ? { ...h, isVacant, ...(updatePayload.approval_status ? { approval_status: updatePayload.approval_status } : {}) } 
-          : h
-      ));
-
-      const updated = await djangoAPI.updateHouse(houseId, updatePayload);
-      setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? { ...h, ...updated } : h));
-
-      toast.success(
-        isVacant ? 'Property marked as vacant' : 'Property marked as occupied',
-        { duration: 3000 }
-      );
-    } catch (err) {
-      console.error('Vacancy toggle error:', err);
-      toast.error('Failed to update vacancy status: ' + (err?.message || ''));
-    }
-  };
 
   // ----------------------------------------------------------------------
   // Enhanced Analytics with Dynamic Metrics
   // ----------------------------------------------------------------------
   const analyticsData = {
     totalProperties: houses.length,
-    vacantProperties: houses.filter(h => h.isVacant).length,
-    occupiedProperties: houses.filter(h => !h.isVacant).length,
     approvedProperties: houses.filter(h => h.approval_status === 'approved').length,
     pendingProperties: houses.filter(h => h.approval_status === 'pending').length,
     totalViews: houses.reduce((sum, house) => sum + (house.views || 0), 0)
@@ -582,9 +544,8 @@ function LandlordDashboard() {
               <div className="header-info">
                 <h2 className="dynamic-gradient-text">My Properties</h2>
                 <p className="section-subtitle">
-                  {filteredHouses.length} of {houses.length} properties • 
-                  <span className="stat-highlight"> {analyticsData.approvedProperties} approved</span> • 
-                  <span className="stat-highlight"> {analyticsData.vacantProperties} vacant</span>
+                  {filteredHouses.length} of {houses.length} properties •
+                  <span className="stat-highlight"> {analyticsData.approvedProperties} approved</span>
                 </p>
               </div>
               
@@ -621,15 +582,6 @@ function LandlordDashboard() {
                     <option value="rejected">Rejected</option>
                   </select>
 
-                  <select 
-                    value={vacancyFilter} 
-                    onChange={(e) => setVacancyFilter(e.target.value)}
-                    className="filter-select dynamic-input"
-                  >
-                    <option value="all">All Vacancy</option>
-                    <option value="vacant">Vacant</option>
-                    <option value="occupied">Occupied</option>
-                  </select>
 
                   <select 
                     value={sortBy} 
@@ -665,7 +617,6 @@ function LandlordDashboard() {
                       userType="landlord"
                       onEdit={() => handleEdit(house)}
                       onDelete={() => handleDeleteHouse(house.id)}
-                      onToggleVacancy={(isVacant) => handleToggleVacancy(house.id, isVacant)}
                       isDarkMode={isDarkMode}
                       animationDelay={index * 0.1}
                       isFavorite={false}
@@ -747,14 +698,6 @@ function LandlordDashboard() {
                 <p className="stat-trend">Card interactions</p>
               </div>
 
-              <div className="stat-card secondary">
-                <div className="stat-icon">
-                  <Users size={24} />
-                </div>
-                <h3>Vacant</h3>
-                <p className="stat-number">{analyticsData.vacantProperties}</p>
-                <p className="stat-trend">Available for rent</p>
-              </div>
             </div>
           </div>
         )}

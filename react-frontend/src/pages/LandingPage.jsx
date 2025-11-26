@@ -6,24 +6,17 @@ import {
   UserPlus,
   Home as HomeIcon,
   MapPin,
-  Lock,
-  User,
-  Star,
-  Shield,
-  Zap,
-  Target,
-  TrendingUp,
-  Eye,
-  Heart,
   Building2,
   ArrowRight,
   Sparkles,
-  Crown,
-  Award,
-  Clock,
-  Calendar,
-  DollarSign,
+  Star,
+  Shield,
+  Zap,
+  User,
+  Lock,
+  TrendingUp,
   Users,
+  Award,
   ChevronDown,
   Menu,
   X,
@@ -333,22 +326,6 @@ function LandingPage() {
               </div>
             </div>
 
-            {/* Primary CTA - Pulsing Effect */}
-            <div className="hero-cta-primary" style={{ animationDelay: '1.2s' }}>
-              <button onClick={handleSignup} className="cta-primary dynamic-btn accent-btn large">
-                <Sparkles size={20} />
-                <span>Start Your Search</span>
-                <ArrowRight size={18} />
-              </button>
-            </div>
-
-            {/* Secondary Actions - Fade In */}
-            <div className="hero-secondary-actions" style={{ animationDelay: '1.4s' }}>
-              <button onClick={scrollToFeatures} className="cta-secondary dynamic-btn outline-btn">
-                <PlayCircle size={20} />
-                <span>Learn More</span>
-              </button>
-            </div>
           </div>
 
           {/* Scroll Indicator - Continuous Animation */}
@@ -450,21 +427,5 @@ function LandingPage() {
     </div>
   );
 }
-
-// Add the missing PlayCircle icon component
-const PlayCircle = (props) => (
-  <svg
-    {...props}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polygon points="10,8 16,12 10,16" />
-  </svg>
-);
 
 export default LandingPage;

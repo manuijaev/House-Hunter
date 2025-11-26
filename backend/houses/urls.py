@@ -33,6 +33,7 @@ urlpatterns = [
     # Message endpoints
     path('messages/', views.MessageListCreateView.as_view(), name='message-list'),
     path('messages/<int:pk>/', views.MessageDetailView.as_view(), name='message-detail'),
+    path('messages/send/', views.send_message, name='send-message'),
     path('houses/<int:house_id>/messages/', views.get_house_messages, name='house-messages'),
     path('houses/<int:house_id>/messages/mark-read/', views.mark_messages_read, name='mark-messages-read'),
     path('conversations/delete/', views.delete_conversation, name='delete-conversation'),
@@ -46,4 +47,7 @@ urlpatterns = [
 
     # Favorites endpoints
     path('favorites/valid/', views.get_valid_favorites, name='valid-favorites'),
+
+    # View tracking endpoints
+    path('houses/<int:house_id>/increment-view/', views.increment_house_view, name='increment-house-view'),
 ]

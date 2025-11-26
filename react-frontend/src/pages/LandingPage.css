@@ -370,8 +370,8 @@ div.landing-page {
   max-width: 1200px;
   text-align: center;
   width: 100%;
-  /* Ensure text is always visible on dark background */
-  color: #ffffff !important;
+  /* Use theme-aware colors */
+  color: var(--text-primary);
 }
 
 .hero-badge {
@@ -393,7 +393,7 @@ div.landing-page {
   font-weight: 800;
   margin-bottom: 1.5rem;
   line-height: 1.1;
-  color: #ffffff !important; /* Always white for visibility on dark background */
+  color: var(--text-primary); /* Use theme-aware color */
 }
 
 .gradient-text {
@@ -405,7 +405,7 @@ div.landing-page {
 
 .hero-subtitle {
   font-size: 1.3rem;
-  color: #e0e0e0 !important; /* Light gray for visibility on dark background */
+  color: var(--text-secondary); /* Use theme-aware color */
   margin-bottom: 3rem;
   line-height: 1.6;
   max-width: 600px;
@@ -421,7 +421,7 @@ div.landing-page {
   gap: 2rem;
   margin-bottom: 3rem;
   flex-wrap: nowrap;
-  color: #e0e0e0 !important; /* Light gray for visibility */
+  color: var(--text-secondary); /* Use theme-aware color */
   width: 100%;
   flex-direction: row !important;
 }
@@ -451,7 +451,7 @@ div.landing-page {
   left: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #e0e0e0;
+  color: var(--text-secondary);
   z-index: 2;
 }
 
@@ -461,14 +461,14 @@ div.landing-page {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  color: #ffffff;
+  color: var(--text-primary);
   font-size: 1rem;
   outline: none;
   backdrop-filter: blur(5px);
 }
 
 .location-search-input::placeholder {
-  color: #e0e0e0;
+  color: var(--text-secondary);
 }
 
 .location-search-input:focus {
@@ -483,7 +483,7 @@ div.landing-page {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #e0e0e0;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 50%;
@@ -517,7 +517,7 @@ div.landing-page {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   backdrop-filter: blur(10px);
-  color: #ffffff !important;
+  color: var(--text-primary);
   flex: 1 1 200px;
   min-width: 200px;
   max-width: 300px;
@@ -543,13 +543,13 @@ div.landing-page {
   display: block;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #ffffff !important; /* Always white */
+  color: var(--text-primary); /* Use theme-aware color */
 }
 
 .stat-label {
   display: block;
   font-size: 0.9rem;
-  color: #e0e0e0 !important; /* Light gray */
+  color: var(--text-secondary); /* Use theme-aware color */
 }
 
 /* Enhanced Hero Search */
@@ -677,7 +677,7 @@ div.landing-page {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #e0e0e0 !important; /* Light gray for visibility */
+  color: var(--text-secondary); /* Use theme-aware color */
   font-size: 0.9rem;
 }
 
@@ -780,6 +780,15 @@ div.landing-page {
   color: var(--text-primary);
   outline: none;
   min-width: 150px;
+}
+
+.show-all-btn {
+  margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.75rem 1.25rem;
 }
 
 /* Enhanced Houses Grid */

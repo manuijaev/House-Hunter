@@ -17,6 +17,7 @@ import './Chatbot.css';
 
 function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
   const {
+    currentUser,
     userPreferences: globalPreferences,
     updateUserPreferences,
     updateUserRecommendations,
@@ -33,14 +34,20 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Create user-specific localStorage keys
+  const getUserKey = (baseKey) => {
+    const userId = currentUser?.id || 'guest';
+    return `${baseKey}_${userId}`;
+  };
+
   // Initialize chatbot with welcome messages
   useEffect(() => {
-    console.log('Chatbot mounting...');
+    console.log('Chatbot initializing for user:', currentUser?.id || 'guest');
 
-    const savedConversation = localStorage.getItem('ai_chatbot_conversation');
-    const savedPreferences = localStorage.getItem('ai_chatbot_preferences');
-    const savedStep = localStorage.getItem('ai_chatbot_step');
-    const savedRecommendations = localStorage.getItem('ai_chatbot_recommendations');
+    const savedConversation = localStorage.getItem(getUserKey('ai_chatbot_conversation'));
+    const savedPreferences = localStorage.getItem(getUserKey('ai_chatbot_preferences'));
+    const savedStep = localStorage.getItem(getUserKey('ai_chatbot_step'));
+    const savedRecommendations = localStorage.getItem(getUserKey('ai_chatbot_recommendations'));
 
     console.log('Saved conversation:', savedConversation);
     console.log('Saved preferences:', savedPreferences);
@@ -57,19 +64,23 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
         {
           id: Date.now(),
           type: 'bot',
-          content: `Hi! I'm your AI House Finder Assistant. Let's find your perfect home!`,
+          content: `Hello! I'm your AI House Finder Assistant.`,
           timestamp: new Date().toISOString()
         },
         {
           id: Date.now() + 1,
           type: 'bot',
-          content: `First, which location are you looking for? (e.g., "Westlands", "Kilimani", "Karen")`,
+          content: `I can help you find the perfect rental property. Just tell me:
+• Your preferred location (e.g., "Westlands", "Kilimani", "Karen")
+• Your monthly budget (e.g., "25000" or "25k")
+
+Let's start by telling me which area you're interested in!`,
           timestamp: new Date().toISOString()
         }
       ];
       setMessages(welcomeMessages);
       // Save initial messages to localStorage
-      localStorage.setItem('ai_chatbot_conversation', JSON.stringify(welcomeMessages));
+      localStorage.setItem(getUserKey('ai_chatbot_conversation'), JSON.stringify(welcomeMessages));
     }
 
     if (savedPreferences) {
@@ -90,26 +101,26 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       // Update context to sync
       updateUserRecommendations(recs).catch(() => {});
     }
-  }, []);
+  }, [currentUser?.id]); // Re-run when user changes
 
   // Save conversation to localStorage whenever it changes
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem('ai_chatbot_conversation', JSON.stringify(messages));
+      localStorage.setItem(getUserKey('ai_chatbot_conversation'), JSON.stringify(messages));
     }
-  }, [messages]);
+  }, [messages, currentUser?.id]);
 
   useEffect(() => {
-    localStorage.setItem('ai_chatbot_preferences', JSON.stringify(userPreferences));
-  }, [userPreferences]);
+    localStorage.setItem(getUserKey('ai_chatbot_preferences'), JSON.stringify(userPreferences));
+  }, [userPreferences, currentUser?.id]);
 
   useEffect(() => {
-    localStorage.setItem('ai_chatbot_step', conversationStep);
-  }, [conversationStep]);
+    localStorage.setItem(getUserKey('ai_chatbot_step'), conversationStep);
+  }, [conversationStep, currentUser?.id]);
 
   useEffect(() => {
-    localStorage.setItem('ai_chatbot_recommendations', JSON.stringify(recommendations));
-  }, [recommendations]);
+    localStorage.setItem(getUserKey('ai_chatbot_recommendations'), JSON.stringify(recommendations));
+  }, [recommendations, currentUser?.id]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -134,6 +145,7 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       setMessages(prev => [...prev, updateMessage]);
     }
   }, [userRecommendations, showViewButton]);
+
 
   // Monitor house changes for dynamic updates
   useEffect(() => {
@@ -174,13 +186,17 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
         {
           id: Date.now(),
           type: 'bot',
-          content: `Hi! I'm your AI House Finder Assistant. Let's find your perfect home!`,
+          content: `👋 Hello! I'm your AI House Finder Assistant.`,
           timestamp: new Date().toISOString()
         },
         {
           id: Date.now() + 1,
           type: 'bot',
-          content: `First, which location are you looking for? (e.g., "Westlands", "Kilimani", "Karen")`,
+          content: `I can help you find the perfect rental property. Just tell me:
+• Your preferred location (e.g., "Westlands", "Kilimani", "Karen")
+• Your monthly budget (e.g., "25000" or "25k")
+
+Let's start by telling me which area you're interested in!`,
           timestamp: new Date().toISOString()
         }
       ];
@@ -193,10 +209,10 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       setConversationStep('location');
       setInputMessage('');
       
-      localStorage.setItem('ai_chatbot_conversation', JSON.stringify(welcomeMessages));
-      localStorage.setItem('ai_chatbot_preferences', JSON.stringify({ location: null, budget: null }));
-      localStorage.setItem('ai_chatbot_step', 'location');
-      localStorage.removeItem('ai_chatbot_recommendations');
+      localStorage.setItem(getUserKey('ai_chatbot_conversation'), JSON.stringify(welcomeMessages));
+      localStorage.setItem(getUserKey('ai_chatbot_preferences'), JSON.stringify({ location: null, budget: null }));
+      localStorage.setItem(getUserKey('ai_chatbot_step'), 'location');
+      localStorage.removeItem(getUserKey('ai_chatbot_recommendations'));
 
       updateUserRecommendations([]).catch(() => {});
       
@@ -236,6 +252,11 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
 
   // Enhanced recommendation logic with 24-hour new house consideration
   const getRecommendations = (location, budget) => {
+    console.log('🔍 AI SEARCH DEBUG:');
+    console.log('Location:', location);
+    console.log('Budget:', budget);
+    console.log('Total houses available:', houses.length);
+
     const isHouseNew = (house) => {
       if (!house.created_at && !house.createdAt) return false;
       try {
@@ -249,21 +270,71 @@ function Chatbot({ houses = [], onClose, isDarkMode, onViewRecommendations }) {
       }
     };
 
-    return houses
-      .filter(h => h.approval_status === 'approved' && (h.isVacant === true || h.isVacant === undefined))
-      .filter(h => (h.location || '').toLowerCase().includes(location.toLowerCase()))
-      .filter(h => {
-        const rent = Number(h.monthlyRent || h.monthly_rent || h.rent || 0);
-        return rent > 0 && rent >= budget * 0.8 && rent <= budget * 1.2;
-      })
+    // Improved location matching - check if search terms are in location or vice versa
+    const matchesLocation = (houseLocation, searchLocation) => {
+      if (!houseLocation || !searchLocation) return false;
+
+      const house = houseLocation.toLowerCase();
+      const search = searchLocation.toLowerCase();
+
+      // Check if search term is in house location
+      if (house.includes(search)) return true;
+
+      // Check if house location contains any word from search
+      const searchWords = search.split(/\s+/);
+      return searchWords.some(word => word.length > 2 && house.includes(word));
+    };
+
+    // Start with all houses
+    let filteredHouses = houses;
+    console.log('Initial houses:', filteredHouses.length);
+
+    // Filter by approval status only (remove vacancy check)
+    filteredHouses = filteredHouses.filter(h => {
+      const approved = h.approval_status === 'approved';
+      console.log(`House ${h.id}: approved=${approved}, location="${h.location}", rent=${h.monthlyRent || h.monthly_rent || h.rent}`);
+      return approved;
+    });
+    console.log('After approval/vacancy filter:', filteredHouses.length);
+
+    // Filter by location
+    filteredHouses = filteredHouses.filter(h => {
+      const matches = matchesLocation(h.location, location);
+      if (!matches) {
+        console.log(`House ${h.id} location "${h.location}" doesn't match search "${location}"`);
+      }
+      return matches;
+    });
+    console.log('After location filter:', filteredHouses.length);
+
+    // Filter by budget
+    filteredHouses = filteredHouses.filter(h => {
+      const rent = Number(h.monthlyRent || h.monthly_rent || h.rent || 0);
+      const inRange = rent >= budget * 0.5 && rent <= budget * 2.0;
+      if (!inRange) {
+        console.log(`House ${h.id} rent ${rent} not in range ${budget * 0.5} - ${budget * 2.0}`);
+      }
+      return rent > 0 && inRange;
+    });
+    console.log('After budget filter:', filteredHouses.length);
+
+    return filteredHouses
       .sort((a, b) => {
         // Prioritize new houses (within 24 hours)
         const aIsNew = isHouseNew(a);
         const bIsNew = isHouseNew(b);
-        
+
         if (aIsNew && !bIsNew) return -1;
         if (!aIsNew && bIsNew) return 1;
-        
+
+        // Then sort by how well the rent matches the budget (closer is better)
+        const aRent = Number(a.monthlyRent || a.monthly_rent || a.rent || 0);
+        const bRent = Number(b.monthlyRent || b.monthly_rent || b.rent || 0);
+        const aDiff = Math.abs(aRent - budget);
+        const bDiff = Math.abs(bRent - budget);
+
+        if (aDiff !== bDiff) return aDiff - bDiff;
+
         // Then sort by creation date (newest first)
         const aDate = new Date(a.created_at || a.createdAt || 0);
         const bDate = new Date(b.created_at || b.createdAt || 0);

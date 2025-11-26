@@ -24,31 +24,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
         const messageList = response.messages || [];
         setMessages(messageList);
 
-        // Check for unread messages and show toast (only once per session)
-        const unreadCount = messageList.filter(msg => msg.sender !== currentUser.id && !msg.is_read).length;
-        const unreadToastKey = `chat_unread_toast_shown_${currentUser.id}_${house.id}`;
-        if (unreadCount > 0 && !localStorage.getItem(unreadToastKey)) {
-          localStorage.setItem(unreadToastKey, 'true');
-          setTimeout(() => {
-            toast.success(`You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} from ${house.landlordName}`, {
-              duration: 5000,
-              style: {
-                background: isDarkMode ? '#1a1a1a' : '#ffffff',
-                color: isDarkMode ? '#ffffff' : '#1a1a1a',
-                border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
-                borderRadius: '12px',
-                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                fontSize: '14px',
-                fontWeight: '500',
-                padding: '12px 16px',
-              },
-              iconTheme: {
-                primary: '#f59e0b',
-                secondary: '#ffffff',
-              },
-            });
-          }, 1000); // Small delay to ensure component is fully loaded
-        }
+        // Mark messages as read (toast is now shown on dashboard)
 
         // Mark messages as read
         await djangoAPI.markMessagesRead(house.id);
@@ -168,9 +144,74 @@ function ChatModal({ house, onClose, isDarkMode }) {
     };
   }, [house, currentUser]);
 
+  // Poll for new messages since WebSocket is failing
+  useEffect(() => {
+    if (!house || !currentUser) return;
+
+    const pollMessages = async () => {
+      try {
+        const response = await djangoAPI.getHouseMessages(house.id);
+        const newMessages = response.messages || [];
+
+        // Check for new messages
+        const existingIds = new Set(messages.map(m => m.id));
+        const newIncomingMessages = newMessages.filter(m => !existingIds.has(m.id) && m.sender !== currentUser.id);
+
+        if (newIncomingMessages.length > 0) {
+          // Add new messages to state
+          setMessages(prev => {
+            const combined = [...prev, ...newIncomingMessages.map(msg => ({
+              id: msg.id,
+              text: msg.text,
+              sender: msg.sender,
+              sender_name: msg.sender === currentUser.id ? 'You' : 'Landlord',
+              receiver: msg.receiver,
+              timestamp: new Date(msg.timestamp),
+              is_read: msg.is_read
+            }))];
+            return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+
+          // Show toast for new messages
+          newIncomingMessages.forEach(message => {
+            const toastKey = `toast_${message.id}`;
+            if (!localStorage.getItem(toastKey)) {
+              localStorage.setItem(toastKey, 'shown');
+              setTimeout(() => localStorage.removeItem(toastKey), 30000);
+
+              toast.success(`New message from ${house.landlordName}`, {
+                duration: 4000,
+                style: {
+                  background: isDarkMode ? '#1a1a1a' : '#ffffff',
+                  color: isDarkMode ? '#ffffff' : '#1a1a1a',
+                  border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  padding: '12px 16px',
+                },
+                iconTheme: {
+                  primary: '#8b5cf6',
+                  secondary: '#ffffff',
+                },
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Error polling messages:', error);
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(pollMessages, 5000);
+    return () => clearInterval(interval);
+  }, [house, messages, currentUser, isDarkMode]);
+
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
+    if (!newMessage.trim()) return;
 
     const messageText = newMessage.trim();
     const tempMessageId = `temp_${Date.now()}`; // Temporary ID for optimistic update
@@ -189,7 +230,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
 
     setMessages(prevMessages => [...prevMessages, optimisticMessage]);
 
-    // Send message via WebSocket
+    // Send message via WebSocket or HTTP fallback
     const messageData = {
       message: messageText,
       sender_id: currentUser.id,
@@ -197,36 +238,57 @@ function ChatModal({ house, onClose, isDarkMode }) {
     };
 
     try {
-      websocketRef.current.send(JSON.stringify(messageData));
-      setNewMessage("");
+      let sent = false;
 
-      // Show success toast for sent message
-      toast.success('Message sent successfully', {
-        duration: 2000,
-        style: {
-          background: isDarkMode ? '#1a1a1a' : '#ffffff',
-          color: isDarkMode ? '#ffffff' : '#1a1a1a',
-          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
-          borderRadius: '12px',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-          fontSize: '14px',
-          fontWeight: '500',
-          padding: '12px 16px',
-        },
-        iconTheme: {
-          primary: '#10b981',
-          secondary: '#ffffff',
-        },
-      });
+      // Try WebSocket first if available
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        websocketRef.current.send(JSON.stringify(messageData));
+        sent = true;
+      } else {
+        // Fallback to HTTP
+        const response = await djangoAPI.sendChatMessage(messageText, house.landlordId, house.id);
+        // Update the temporary ID with the real one from server
+        if (response.message_id) {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === tempMessageId ? { ...msg, id: response.message_id, isSending: false } : msg
+            )
+          );
+        }
+        sent = true;
+      }
 
-      // Remove sending flag after a short delay (will be replaced by real message from WebSocket)
-      setTimeout(() => {
-        setMessages(prevMessages =>
-          prevMessages.map(msg =>
-            msg.id === tempMessageId ? { ...msg, isSending: false } : msg
-          )
-        );
-      }, 1000);
+      if (sent) {
+        setNewMessage("");
+
+        // Show success toast for sent message
+        toast.success('Message sent successfully', {
+          duration: 2000,
+          style: {
+            background: isDarkMode ? '#1a1a1a' : '#ffffff',
+            color: isDarkMode ? '#ffffff' : '#1a1a1a',
+            border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+            fontSize: '14px',
+            fontWeight: '500',
+            padding: '12px 16px',
+          },
+          iconTheme: {
+            primary: '#10b981',
+            secondary: '#ffffff',
+          },
+        });
+
+        // Remove sending flag after a short delay if not already updated
+        setTimeout(() => {
+          setMessages(prevMessages =>
+            prevMessages.map(msg =>
+              msg.id === tempMessageId ? { ...msg, isSending: false } : msg
+            )
+          );
+        }, 1000);
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);
@@ -299,28 +361,32 @@ function ChatModal({ house, onClose, isDarkMode }) {
               <p>Start a conversation with the landlord</p>
             </div>
           ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`message ${
-                  msg.sender === currentUser.id ? "sent" : "received"
-                } ${msg.isSending ? "sending" : ""}`}
-              >
-                <div className="message-avatar">
-                  {msg.sender_name?.charAt(0).toUpperCase() || "U"}
+            messages.map((msg) => {
+              console.log("MESSAGE:", msg.text);
+              const cleanText = msg.text.replace(/[\n\r\t\f\v\u00AD\u200B\u200C\u200D\uFEFF]/g, ' ').trim();
+              return (
+                <div
+                  key={msg.id}
+                  className={`message ${
+                    msg.sender === currentUser.id ? "sent" : "received"
+                  } ${msg.isSending ? "sending" : ""}`}
+                >
+                  <div className="message-avatar">
+                    {msg.sender_name?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                  <div className="message-content">
+                    <p className="message-text">{cleanText}</p>
+                    <span className="message-time">
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      {msg.isSending && <span className="sending-indicator"> • Sending...</span>}
+                    </span>
+                  </div>
                 </div>
-                <div className="message-content">
-                  <p className="message-text">{msg.text}</p>
-                  <span className="message-time">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {msg.isSending && <span className="sending-indicator"> • Sending...</span>}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

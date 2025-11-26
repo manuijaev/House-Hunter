@@ -15,6 +15,7 @@ class HouseSerializer(serializers.ModelSerializer):
     pendingReason = serializers.CharField(source='pending_reason', required=False, allow_blank=True)
     landlordUid = serializers.CharField(source='landlord_uid', required=False, allow_blank=True)
     landlordEmail = serializers.EmailField(source='landlord_email', required=False, allow_blank=True)
+    views = serializers.IntegerField(source='view_count', required=False, read_only=True)
 
     class Meta:
         model = House
@@ -23,7 +24,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'monthlyRent', 'deposit', 'availableDate',
             'images', 'amenities', 'landlord', 'landlordName', 'displayName', 'landlordUsername', 'landlordId', 'landlordUid', 'landlordEmail',
             'isVacant', 'approval_status', 'pendingReason', 'created_at', 'updated_at',
-            'contactPhone', 'contactEmail'
+            'contactPhone', 'contactEmail', 'views'
         ]
         read_only_fields = [
             'id', 'landlord',

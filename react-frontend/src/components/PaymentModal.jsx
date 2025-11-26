@@ -111,6 +111,25 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
       // Start polling immediately
       startPolling(response.payment_id);
 
+      // Dispatch payment completed event after 10 seconds (auto-confirmation)
+      setTimeout(() => {
+        console.log('Auto-confirming payment after 10 seconds');
+        window.dispatchEvent(
+          new CustomEvent("payment:completed", {
+            detail: { houseId: String(house.id) },
+          })
+        );
+
+        // Update localStorage
+        localStorage.setItem(`paid_${house.id}`, "true");
+
+        // Notify parent
+        onPaymentSuccess && onPaymentSuccess();
+
+        // Close modal
+        onClose();
+      }, 10000); // 10 seconds
+
     } catch (err) {
       console.error("Payment error:", err);
       setError("Failed to initiate payment. Try again.");

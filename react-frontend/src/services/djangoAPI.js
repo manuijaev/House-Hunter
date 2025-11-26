@@ -69,6 +69,14 @@ export const djangoAPI = {
     return await makeApiCall('/my-houses/');
   },
 
+  getPendingHouses: async () => {
+    return await makeApiCall('/admin/pending-houses/');
+  },
+
+  getRejectedHouses: async () => {
+    return await makeApiCall('/admin/rejected-houses/');
+  },
+
   getLandlordHouses: async (landlordId) => {
     const uid = encodeURIComponent(landlordId || '');
     const qp = uid ? `?landlord_uid=${uid}` : '';
@@ -155,13 +163,7 @@ export const djangoAPI = {
 
   incrementHouseView: async (houseId) => {
     // Increment view count for analytics
-    try {
-      return await makeApiCall(`/houses/${houseId}/increment-view/`, { method: 'POST' });
-    } catch (error) {
-      // If endpoint doesn't exist, just log and continue
-      console.log('View tracking endpoint not available:', error.message);
-      return null;
-    }
+    return await makeApiCall(`/houses/${houseId}/increment-view/`, { method: 'POST' });
   },
 
   getHouseViews: async (houseId) => {
@@ -272,6 +274,17 @@ export const djangoAPI = {
     return await makeApiCall('/messages/', {
       method: 'POST',
       body: JSON.stringify(messageData),
+    });
+  },
+
+  sendChatMessage: async (message, receiverId, houseId) => {
+    return await makeApiCall('/messages/send/', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: message,
+        receiver_id: receiverId,
+        house_id: houseId
+      }),
     });
   },
 

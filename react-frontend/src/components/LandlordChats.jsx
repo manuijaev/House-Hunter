@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { djangoAPI } from "../services/djangoAPI";
 import { ArrowLeft, Send, MessageCircle, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import './LandlordChats.css';
 
 function LandlordChats({ isDarkMode }) {
@@ -90,11 +91,9 @@ function LandlordChats({ isDarkMode }) {
           return new Date(b.lastTime) - new Date(a.lastTime);
         });
 
-        // Show toast notifications for unread messages on login/initial load (only once per session)
+        // Show toast notifications for unread messages on dashboard load
         const totalUnreadCount = conversationsArray.reduce((total, conv) => total + conv.unreadCount, 0);
-        const unreadToastKey = `unread_toast_shown_${currentUser.id}`;
-        if (totalUnreadCount > 0 && !localStorage.getItem(unreadToastKey)) {
-          localStorage.setItem(unreadToastKey, 'true');
+        if (totalUnreadCount > 0) {
           setTimeout(() => {
             toast.success(`You have ${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`, {
               duration: 5000,
@@ -103,18 +102,18 @@ function LandlordChats({ isDarkMode }) {
                 color: isDarkMode ? '#ffffff' : '#1a1a1a',
                 border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
                 borderRadius: '12px',
-                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                fontSize: '14px',
-                fontWeight: '500',
-                padding: '12px 16px',
-              },
-              iconTheme: {
-                primary: '#f59e0b',
-                secondary: '#ffffff',
-              },
-            });
-          }, 1000); // Small delay to ensure component is fully loaded
-        }
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+              fontSize: '14px',
+              fontWeight: '500',
+              padding: '12px 16px',
+            },
+            iconTheme: {
+              primary: '#f59e0b',
+              secondary: '#ffffff',
+            },
+          });
+        }, 1000); // Small delay to ensure component is fully loaded
+      }
 
         setConversations(conversationsArray);
       } catch (error) {
@@ -237,6 +236,63 @@ function LandlordChats({ isDarkMode }) {
     }
   }, [selectedConversation]);
 
+  // Poll for new messages in selected conversation
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const pollMessages = async () => {
+      try {
+        const response = await djangoAPI.getHouseMessages(selectedConversation.houseId);
+        const newMessages = response.messages || [];
+
+        // Check for new messages
+        const existingIds = new Set(messages.map(m => m.id));
+        const newIncomingMessages = newMessages.filter(m => !existingIds.has(m.id) && m.sender !== currentUser.id);
+
+        if (newIncomingMessages.length > 0) {
+          // Add new messages to state
+          setMessages(prev => {
+            const combined = [...prev, ...newIncomingMessages];
+            return combined.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+
+          // Show toast for new messages
+          newIncomingMessages.forEach(message => {
+            const toastKey = `toast_${message.id}`;
+            if (!localStorage.getItem(toastKey)) {
+              localStorage.setItem(toastKey, 'shown');
+              setTimeout(() => localStorage.removeItem(toastKey), 30000);
+
+              toast.success(`New message from ${selectedConversation.tenantName}`, {
+                duration: 4000,
+                style: {
+                  background: isDarkMode ? '#1a1a1a' : '#ffffff',
+                  color: isDarkMode ? '#ffffff' : '#1a1a1a',
+                  border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  padding: '12px 16px',
+                },
+                iconTheme: {
+                  primary: '#8b5cf6',
+                  secondary: '#ffffff',
+                },
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Error polling messages:', error);
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(pollMessages, 5000);
+    return () => clearInterval(interval);
+  }, [selectedConversation, messages, currentUser, isDarkMode]);
+
   const handleSelectConversation = (conversation) => {
     setSelectedConversation(conversation);
     setShowMobileChat(true);
@@ -244,16 +300,43 @@ function LandlordChats({ isDarkMode }) {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
+    if (!newMessage.trim() || !selectedConversation) return;
 
+    const messageText = newMessage.trim();
     const messageData = {
-      message: newMessage.trim(),
+      message: messageText,
       sender_id: currentUser.id,
       receiver_id: selectedConversation.tenantId,
     };
 
     try {
-      websocketRef.current.send(JSON.stringify(messageData));
+      // Create the message object for local state
+      const newMessageObj = {
+        id: Date.now(), // Temporary ID until WebSocket echoes back
+        text: messageText,
+        sender: currentUser.id,
+        receiver: selectedConversation.tenantId,
+        timestamp: new Date().toISOString(),
+        is_read: false
+      };
+
+      // Add message to local state immediately
+      setMessages(prev => [...prev, newMessageObj].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
+
+      // Try WebSocket first if available
+      if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+        websocketRef.current.send(JSON.stringify(messageData));
+      } else {
+        // Fallback to HTTP
+        const response = await djangoAPI.sendChatMessage(messageText, selectedConversation.tenantId, selectedConversation.houseId);
+        // Update the temporary ID with the real one from server
+        if (response.message_id) {
+          setMessages(prev => prev.map(msg =>
+            msg.id === newMessageObj.id ? { ...msg, id: response.message_id } : msg
+          ));
+        }
+      }
+
       setNewMessage("");
 
       // Show success toast for sent message
@@ -474,22 +557,26 @@ function LandlordChats({ isDarkMode }) {
                     <p>Start a conversation with this tenant.</p>
                   </div>
                 ) : (
-                  messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`message ${message.sender === currentUser.id ? 'sent' : 'received'}`}
-                    >
-                      <div className="message-content">
-                        <p>{message.text}</p>
-                        <span className="message-time">
-                          {new Date(message.timestamp).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
+                  messages.map((message) => {
+                    console.log("MESSAGE:", message.text);
+                    const cleanText = message.text.replace(/[\n\r\t\f\v\u00AD\u200B\u200C\u200D\uFEFF]/g, ' ').trim();
+                    return (
+                      <div
+                        key={message.id}
+                        className={`message ${message.sender === currentUser.id ? 'sent' : 'received'}`}
+                      >
+                        <div className="message-content">
+                          <p>{cleanText}</p>
+                          <span className="message-time">
+                            {new Date(message.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
                 <div ref={messagesEndRef} />
               </div>

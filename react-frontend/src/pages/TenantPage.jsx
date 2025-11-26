@@ -59,6 +59,7 @@ function TenantPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [unreadToastShown, setUnreadToastShown] = useState(false);
 
 
   // Enhanced house fetching with loading states
@@ -68,7 +69,7 @@ function TenantPage() {
         setLoading(true);
         const housesData = await djangoAPI.getHouses();
         const filtered = (Array.isArray(housesData) ? housesData : []).filter(
-          house => house.approval_status === 'approved' && (house.isVacant === true || house.isVacant === undefined)
+          house => house.approval_status === 'approved'
         );
         
         // Helper function to check if house was posted within 24 hours
@@ -91,7 +92,7 @@ function TenantPage() {
         const enhancedHouses = filtered.map(house => ({
           ...house,
           popularity: Math.floor(Math.random() * 100) + 1,
-          views: Math.floor(Math.random() * 1000) + 100,
+          views: house.views || Math.floor(Math.random() * 1000) + 100,
           rating: (Math.random() * 2 + 3).toFixed(1),
           isNew: isHouseNew(house)
         }));
@@ -240,6 +241,7 @@ function TenantPage() {
         // For now, we'll fetch message counts periodically
         // In the future, this could be replaced with WebSocket real-time updates
         const counts = {};
+        let totalUnreadCount = 0;
         for (const house of houses) {
           try {
             const response = await djangoAPI.getHouseMessages(house.id);
@@ -249,12 +251,37 @@ function TenantPage() {
             ).length;
             if (unreadCount > 0) {
               counts[house.id] = unreadCount;
+              totalUnreadCount += unreadCount;
             }
           } catch (error) {
             console.warn(`Failed to fetch messages for house ${house.id}:`, error);
           }
         }
         setHouseMessageCounts(counts);
+
+        // Show toast notifications for unread messages on dashboard load (only once per load)
+        if (totalUnreadCount > 0 && !unreadToastShown) {
+          setUnreadToastShown(true);
+          setTimeout(() => {
+            toast.success(`You have ${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''} from landlords`, {
+              duration: 5000,
+              style: {
+                background: isDarkMode ? '#1a1a1a' : '#ffffff',
+                color: isDarkMode ? '#ffffff' : '#1a1a1a',
+                border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                fontSize: '14px',
+                fontWeight: '500',
+                padding: '12px 16px',
+              },
+              iconTheme: {
+                primary: '#f59e0b',
+                secondary: '#ffffff',
+              },
+            });
+          }, 1000); // Small delay to ensure component is fully loaded
+        }
       } catch (error) {
         console.error('Error fetching message counts:', error);
       }
@@ -262,7 +289,7 @@ function TenantPage() {
 
     // Fetch initially
     fetchMessageCounts();
-  }, [currentUser, houses]);
+  }, [currentUser, houses, isDarkMode]);
 
 
   // Enhanced logout

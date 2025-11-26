@@ -73,7 +73,6 @@ function HouseCard({
   onChat,
   onEdit,
   onDelete,
-  onToggleVacancy,
   onFavorite,
   onShare,
   onQuickView,
@@ -106,7 +105,6 @@ function HouseCard({
   const { toggleFavorite, isFavorited } = useFavoritesManager();
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
   const [isPaid, setIsPaid] = useState(() =>
     propIsPaid !== undefined ? propIsPaid : localStorage.getItem(`paid_${house.id}`) === "true"
   );
@@ -122,21 +120,19 @@ function HouseCard({
   // Update local state when house prop changes
   useEffect(() => {
     if (house) {
-      setIsVacant(house.isVacant ?? true);
-      
       // Check if this house has been viewed before (persistent storage) - only for tenants
       if (userType === 'tenant') {
         const viewedHouses = JSON.parse(localStorage.getItem('viewed_houses') || '[]');
         const hasBeenViewed = viewedHouses.includes(String(house.id));
         setIsViewed(hasBeenViewed);
-        
+
         // If house has been viewed, expand it automatically
         if (hasBeenViewed) {
           setIsExpanded(true);
         }
       }
     }
-  }, [house?.isVacant, house?.id, userType]);
+  }, [house?.id, userType]);
 
   // Check payment status
   useEffect(() => {
@@ -495,23 +491,6 @@ function HouseCard({
     }
   }, [isExpanded, userType, currentUser, navigate]);
 
-  const handleVacancyToggle = useCallback(async (e) => {
-    e?.stopPropagation();
-    if (!houseData?.id) return;
-    
-    const newVacant = !isVacant;
-    setIsVacant(newVacant);
-    
-    if (onToggleVacancy) {
-      try {
-        await onToggleVacancy(newVacant, houseData.id);
-      } catch (error) {
-        // Revert on error
-        setIsVacant(isVacant);
-        toast.error('Failed to update vacancy status');
-      }
-    }
-  }, [isVacant, houseData?.id, onToggleVacancy]);
 
   const handleDeleteClick = useCallback(async (e) => {
     e.stopPropagation();
@@ -607,7 +586,7 @@ function HouseCard({
   return (
     <>
       <div
-        className={`house-card enhanced ${userType === 'tenant' ? 'compact-tenant-card' : ''} ${!isVacant ? 'occupied' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''} ${isHovered ? 'hovered' : ''} ${isFavorite ? 'favorited' : ''} ${isExpanded ? 'expanded' : ''} ${isViewed ? 'viewed' : ''}`}
+        className={`house-card enhanced ${userType === 'tenant' ? 'compact-tenant-card' : ''} ${isRecommended ? 'recommended' : ''} ${isDarkMode ? 'dark' : ''} ${isHovered ? 'hovered' : ''} ${isFavorite ? 'favorited' : ''} ${isExpanded ? 'expanded' : ''} ${isViewed ? 'viewed' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={handleCardClick}
@@ -698,12 +677,6 @@ function HouseCard({
               </div>
             )}
 
-            {!isVacant && (
-              <div className="occupied-badge-enhanced">
-                <Users size={14} />
-                <span>Occupied</span>
-              </div>
-            )}
           </div>
 
           
@@ -906,7 +879,7 @@ function HouseCard({
           {/* Enhanced Actions */}
           {showActions && (
             <div className="action-buttons-enhanced">
-              {userType === 'tenant' && isVacant && (
+              {userType === 'tenant' && (
                 <>
                   {isPaid ? (
                     <>
@@ -954,13 +927,6 @@ function HouseCard({
 
               {userType === 'landlord' && (
                 <div className="landlord-actions-enhanced">
-                  <button
-                    className={`toggle-vacancy-btn-enhanced ${isVacant ? 'vacant' : 'occupied'}`}
-                    onClick={handleVacancyToggle}
-                  >
-                    {isVacant ? <Users size={16} /> : <Home size={16} />}
-                    <span>{isVacant ? 'Mark Occupied' : 'Mark Vacant'}</span>
-                  </button>
                   <button
                     className="edit-btn-enhanced"
                     onClick={(e) => {
@@ -1153,8 +1119,6 @@ function HouseCard({
           onPayment={onPayment}
           onUnlockClick={handlePaymentClick}
           isDarkMode={isDarkMode}
-          isFavorite={isFavorite}
-          onFavorite={onFavorite}
         />
       )}
 

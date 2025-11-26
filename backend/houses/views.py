@@ -12,6 +12,9 @@ import base64
 import json
 from datetime import datetime
 import os
+import threading
+import time
+from django.db import transaction
 
 
 # M-Pesa API Configuration
@@ -95,6 +98,58 @@ def initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
     return response.json()
 
 
+def simulate_payment_success(payment_id):
+    """Simulate payment success after 10 seconds for development"""
+    def simulate():
+        time.sleep(20)
+        try:
+            payment = Payment.objects.get(id=payment_id)
+            if payment.status == 'pending':
+                payment.status = 'completed'
+                payment.mpesa_receipt_number = f'SIM{payment.id}'
+                payment.result_desc = 'Payment completed successfully (simulated)'
+                payment.save()
+
+                # Broadcast payment status update via WebSocket
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+
+                try:
+                    channel_layer = get_channel_layer()
+
+                    # Broadcast to specific payment WebSocket (existing)
+                    async_to_sync(channel_layer.group_send)(
+                        f'payment_{payment.id}',
+                        {
+                            'type': 'payment_status_update',
+                            'status': 'completed'
+                        }
+                    )
+
+                    # Broadcast to user's payment completion group (new)
+                    if payment.user:
+                        async_to_sync(channel_layer.group_send)(
+                            f'user_payments_{payment.user.id}',
+                            {
+                                'type': 'payment_completed',
+                                'house_id': payment.house.id if payment.house else None,
+                                'payment_id': payment.id
+                            }
+                        )
+                        print(f"Simulated payment completion for user {payment.user.id} for house {payment.house.id if payment.house else None}")
+
+                    print(f"Simulated payment success for payment {payment_id}")
+                except Exception as e:
+                    print(f"Failed to broadcast simulated payment status: {e}")
+        except Exception as e:
+            print(f"Error in payment simulation: {e}")
+
+    # Start simulation in background thread
+    thread = threading.Thread(target=simulate)
+    thread.daemon = True
+    thread.start()
+
+
 class IsLandlord(permissions.BasePermission):
     """Custom permission to only allow landlords to access certain views"""
 
@@ -137,14 +192,22 @@ class HouseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         """
-        Tenants see only approved + vacant houses.
+        Tenants see all approved houses.
+        Admins see all houses.
         Supports ?search=query for filtering by title/location.
         """
-        queryset = House.objects.filter(approval_status='approved', is_vacant=True)
+        user = self.request.user
+        if user.is_authenticated and user.role == 'admin':
+            # Admins see all houses
+            queryset = House.objects.all()
+        else:
+            # Tenants see all approved houses (not just vacant ones)
+            queryset = House.objects.filter(approval_status='approved')
+
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
-                Q(title__icontains=search) | 
+                Q(title__icontains=search) |
                 Q(location__icontains=search)
             )
         return queryset
@@ -373,6 +436,72 @@ def delete_conversation(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def send_message(request):
+    """
+    Send a message via HTTP (fallback for WebSocket)
+    """
+    try:
+        message = request.data.get('message')
+        receiver_id = request.data.get('receiver_id')
+        house_id = request.data.get('house_id')
+
+        if not message or not receiver_id or not house_id:
+            return Response({'error': 'message, receiver_id, and house_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        house = House.objects.get(id=house_id)
+        receiver = User.objects.get(id=receiver_id)
+        user = request.user
+
+        # Check permissions
+        if user.role == 'landlord':
+            if house.landlord != user:
+                return Response({'error': 'You can only send messages for your houses'}, status=status.HTTP_403_FORBIDDEN)
+        elif user.role == 'tenant':
+            if house.approval_status != 'approved':
+                return Response({'error': 'House is not approved'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            return Response({'error': 'Invalid user role'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create message
+        message_obj = Message.objects.create(
+            sender=user,
+            receiver=receiver,
+            house=house,
+            text=message
+        )
+
+        # Broadcast via WebSocket
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{house_id}',
+                {
+                    'type': 'chat_message',
+                    'message': message,
+                    'sender_id': user.id,
+                    'receiver_id': receiver_id,
+                    'timestamp': message_obj.timestamp.isoformat(),
+                    'message_id': message_obj.id,
+                }
+            )
+        except Exception as e:
+            print(f"Failed to broadcast message: {e}")
+
+        return Response({'message': 'Message sent successfully', 'message_id': message_obj.id}, status=status.HTTP_201_CREATED)
+
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+    except User.DoesNotExist:
+        return Response({'error': 'Receiver not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # Payment Views
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])  # Temporarily allow anyone for testing
@@ -392,6 +521,14 @@ def initiate_payment(request):
         if not phone_number.startswith('254') or len(phone_number) != 12:
             return Response({'error': 'Phone number must be in format 254XXXXXXXXX'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Get house instance if house_id provided
+        house_instance = None
+        if house_id:
+            try:
+                house_instance = House.objects.get(id=house_id)
+            except House.DoesNotExist:
+                return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+
         # Create payment record
         payment = Payment.objects.create(
             amount=amount,
@@ -399,12 +536,17 @@ def initiate_payment(request):
             account_reference=account_reference,
             transaction_desc=transaction_desc,
             user=request.user if request.user.is_authenticated else None,
-            house_id=house_id if house_id else None,
+            house=house_instance,
             transaction_id=''  # Set to empty string initially
         )
 
         # Initiate STK push with real M-Pesa API
-        stk_response = initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
+        try:
+            stk_response = initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
+        except Exception as e:
+            print(f"M-Pesa API error: {e}")
+            payment.delete()  # Clean up the payment record
+            return Response({'error': 'Payment service temporarily unavailable'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         if stk_response.get('ResponseCode') == '0':
             # API success
@@ -413,6 +555,57 @@ def initiate_payment(request):
             payment.save()
 
             print(f"STK push successful for payment {payment.id} - phone: {phone_number}")
+
+            # Simulate payment success after 10 seconds for development
+            def simulate():
+                import time
+                time.sleep(6)
+                try:
+                    payment.status = 'completed'
+                    payment.mpesa_receipt_number = f'SIM{payment.id}'
+                    payment.result_desc = 'Payment completed successfully (simulated)'
+                    payment.save()
+
+                    # Mark house as rented (not vacant)
+                    if payment.house:
+                        payment.house.is_vacant = False
+                        payment.house.save(update_fields=['is_vacant'])
+
+                    # Broadcast payment status update via WebSocket
+                    from channels.layers import get_channel_layer
+                    from asgiref.sync import async_to_sync
+
+                    try:
+                        channel_layer = get_channel_layer()
+                        async_to_sync(channel_layer.group_send)(
+                            f'payment_{payment.id}',
+                            {
+                                'type': 'payment_status_update',
+                                'status': 'completed'
+                            }
+                        )
+
+                        # Broadcast house status update
+                        if payment.house:
+                            async_to_sync(channel_layer.group_send)(
+                                'house_updates',
+                                {
+                                    'type': 'house_status_update',
+                                    'house_id': payment.house.id,
+                                    'is_vacant': False
+                                }
+                            )
+
+                        print(f"Simulated payment completion for payment {payment.id}")
+                    except Exception as e:
+                        print(f"Failed to broadcast simulated payment: {e}")
+                except Exception as e:
+                    print(f"Error in payment simulation: {e}")
+
+            import threading
+            thread = threading.Thread(target=simulate)
+            thread.daemon = True
+            thread.start()
 
             return Response({
                 'message': 'STK push initiated successfully',
@@ -507,11 +700,11 @@ def mpesa_callback(request):
                     f'user_payments_{payment.user.id}',
                     {
                         'type': 'payment_completed',
-                        'house_id': payment.house_id,
+                        'house_id': payment.house.id if payment.house else None,
                         'payment_id': payment.id
                     }
                 )
-                print(f"Broadcasted payment completion to user {payment.user.id} for house {payment.house_id}")
+                print(f"Broadcasted payment completion to user {payment.user.id} for house {payment.house.id if payment.house else None}")
 
             print(f"Broadcasted payment status update for payment {payment.id}: {payment.status}")
         except Exception as e:
@@ -640,6 +833,21 @@ def get_user_payments(request):
         })
 
     return Response({'payments': payment_data}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def increment_house_view(request, house_id):
+    """
+    Increment the view count for a house when viewed by a tenant
+    """
+    try:
+        house = House.objects.get(id=house_id)
+        house.view_count += 1
+        house.save(update_fields=['view_count'])
+        return Response({'view_count': house.view_count}, status=status.HTTP_200_OK)
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['GET'])
@@ -787,7 +995,7 @@ def login(request):
     # Check if user is banned
     if user.is_banned:
         return Response({
-            'error': 'Your account has been banned. Please contact an administrator to review your account.'
+            'error': 'Your account has been banned. Please contact an administrator for review.call 0726261857'
         }, status=status.HTTP_403_FORBIDDEN)
 
     # Set user as online

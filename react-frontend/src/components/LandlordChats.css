@@ -323,12 +323,15 @@
 }
 
 .message-content {
-  max-width: 85%;
+  max-width: 90%;
   background: #e3f2fd;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 18px;
   position: relative;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  line-height: 1.4;
 }
 
 .message.sent .message-content {
@@ -554,7 +557,7 @@
   }
 
   .message-content {
-    max-width: 85%;
+    max-width: 90%;
     font-size: 14px;
   }
 
@@ -1101,14 +1104,14 @@
   background: #f5f6fa;
   border: 1px solid #e5e7eb;
   border-radius: 16px;
-  padding: 8px 12px;
+  padding: 12px 12px;
   margin-bottom: 4px;
   position: relative;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 13px;
   color: whitesmoke;
-  white-space: pre-wrap;
+
 }
 
 .message-bubble:hover {
