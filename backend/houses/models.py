@@ -10,6 +10,8 @@ class User(AbstractUser):
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='tenant')
     is_banned = models.BooleanField(default=False, help_text="Whether the user account is banned")
+    is_online = models.BooleanField(default=False, help_text="Whether the user is currently online")
+    last_seen = models.DateTimeField(auto_now=True, help_text="Last time the user was active")
 
     def __str__(self):
         return f"{self.username} ({self.role})"

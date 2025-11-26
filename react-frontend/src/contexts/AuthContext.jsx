@@ -60,6 +60,9 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Call backend logout endpoint to set user as offline
+      await djangoAPI.logout();
+
       // Clear tokens from localStorage
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -68,6 +71,13 @@ export const AuthProvider = ({ children }) => {
       setUserPreferences(null);
       setUserRecommendations([]);
     } catch (error) {
+      // Even if backend call fails, clear local state
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setCurrentUser(null);
+      setUserType(null);
+      setUserPreferences(null);
+      setUserRecommendations([]);
       throw error;
     }
   };

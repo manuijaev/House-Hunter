@@ -525,8 +525,8 @@ function AdminPage() {
                     )}
                     <div className="stat">
                       <UserCheck size={16} />
-                      <span className={user.is_active ? 'active-status' : 'inactive-status'}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                      <span className={user.is_online ? 'active-status' : 'inactive-status'}>
+                        {user.is_online ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>

@@ -86,7 +86,7 @@ def initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
         'PartyA': phone_number,
         'PartyB': MPESA_CONFIG['shortcode'],
         'PhoneNumber': phone_number,
-        'CallBackURL': os.getenv('CALLBACK_URL', 'http://localhost:8000/api/payments/callback/'),
+        'CallBackURL': os.getenv('MPESA_CALLBACK_URL', 'http://localhost:8000/api/payments/callback/'),
         'AccountReference': account_reference,
         'TransactionDesc': transaction_desc
     }
@@ -334,6 +334,43 @@ def get_house_messages(request, house_id):
 
     except House.DoesNotExist:
         return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_conversation(request):
+    """
+    Delete all messages in a conversation between landlord and a specific tenant for a house
+    """
+    try:
+        house_id = request.data.get('house_id')
+        tenant_id = request.data.get('tenant_id')
+
+        if not house_id or not tenant_id:
+            return Response({'error': 'house_id and tenant_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify the user is the landlord of this house
+        house = House.objects.get(id=house_id)
+        if house.landlord != request.user:
+            return Response({'error': 'You can only delete conversations for your own houses'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Delete all messages between landlord and this tenant for this house
+        deleted_count = Message.objects.filter(
+            Q(house=house) & (
+                (Q(sender=request.user) & Q(receiver_id=tenant_id)) |
+                (Q(sender_id=tenant_id) & Q(receiver=request.user))
+            )
+        ).delete()
+
+        return Response({
+            'message': f'Conversation deleted successfully. {deleted_count[0]} messages removed.',
+            'deleted_count': deleted_count[0]
+        }, status=status.HTTP_200_OK)
+
+    except House.DoesNotExist:
+        return Response({'error': 'House not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # Payment Views
@@ -753,6 +790,10 @@ def login(request):
             'error': 'Your account has been banned. Please contact an administrator to review your account.'
         }, status=status.HTTP_403_FORBIDDEN)
 
+    # Set user as online
+    user.is_online = True
+    user.save(update_fields=['is_online'])
+
     refresh = RefreshToken.for_user(user)
 
     return Response({
@@ -782,6 +823,17 @@ def get_user(request):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def logout(request):
+    """Logout user and set as offline"""
+    user = request.user
+    user.is_online = False
+    user.save(update_fields=['is_online'])
+
+    return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+
+
 @api_view(['GET'])
 @permission_classes([IsAdmin])
 def get_users(request):
@@ -797,6 +849,8 @@ def get_users(request):
             'date_joined': user.date_joined.isoformat(),
             'is_active': user.is_active,
             'is_banned': user.is_banned,
+            'is_online': user.is_online,
+            'last_seen': user.last_seen.isoformat() if user.last_seen else None,
             'last_login': user.last_login.isoformat() if user.last_login else None
         })
 

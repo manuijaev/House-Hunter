@@ -21,7 +21,34 @@ function ChatModal({ house, onClose, isDarkMode }) {
       try {
         setLoading(true);
         const response = await djangoAPI.getHouseMessages(house.id);
-        setMessages(response.messages || []);
+        const messageList = response.messages || [];
+        setMessages(messageList);
+
+        // Check for unread messages and show toast (only once per session)
+        const unreadCount = messageList.filter(msg => msg.sender !== currentUser.id && !msg.is_read).length;
+        const unreadToastKey = `chat_unread_toast_shown_${currentUser.id}_${house.id}`;
+        if (unreadCount > 0 && !localStorage.getItem(unreadToastKey)) {
+          localStorage.setItem(unreadToastKey, 'true');
+          setTimeout(() => {
+            toast.success(`You have ${unreadCount} unread message${unreadCount > 1 ? 's' : ''} from ${house.landlordName}`, {
+              duration: 5000,
+              style: {
+                background: isDarkMode ? '#1a1a1a' : '#ffffff',
+                color: isDarkMode ? '#ffffff' : '#1a1a1a',
+                border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                fontSize: '14px',
+                fontWeight: '500',
+                padding: '12px 16px',
+              },
+              iconTheme: {
+                primary: '#f59e0b',
+                secondary: '#ffffff',
+              },
+            });
+          }, 1000); // Small delay to ensure component is fully loaded
+        }
 
         // Mark messages as read
         await djangoAPI.markMessagesRead(house.id);
@@ -34,7 +61,7 @@ function ChatModal({ house, onClose, isDarkMode }) {
     };
 
     loadMessages();
-  }, [house, currentUser]);
+  }, [house, currentUser, isDarkMode]);
 
   // WebSocket connection for real-time messaging
   useEffect(() => {
@@ -88,6 +115,37 @@ function ChatModal({ house, onClose, isDarkMode }) {
 
           return [...filteredMessages, newMessage].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         });
+
+        // Show toast notification for new messages from landlord (only for received messages)
+        if (data.sender_id !== currentUser.id && data.receiver_id === currentUser.id) {
+          // Prevent duplicate toasts using localStorage
+          const toastKey = `toast_${data.message_id}`;
+          if (localStorage.getItem(toastKey)) return;
+          localStorage.setItem(toastKey, 'shown');
+
+          // Clean up old toast keys after 30 seconds
+          setTimeout(() => {
+            localStorage.removeItem(toastKey);
+          }, 30000);
+
+          toast.success(`New message from ${house.landlordName}`, {
+            duration: 4000,
+            style: {
+              background: isDarkMode ? '#1a1a1a' : '#ffffff',
+              color: isDarkMode ? '#ffffff' : '#1a1a1a',
+              border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+              fontSize: '14px',
+              fontWeight: '500',
+              padding: '12px 16px',
+            },
+            iconTheme: {
+              primary: '#8b5cf6',
+              secondary: '#ffffff',
+            },
+          });
+        }
       };
 
       websocketRef.current.onclose = () => {
@@ -142,6 +200,25 @@ function ChatModal({ house, onClose, isDarkMode }) {
       websocketRef.current.send(JSON.stringify(messageData));
       setNewMessage("");
 
+      // Show success toast for sent message
+      toast.success('Message sent successfully', {
+        duration: 2000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+        iconTheme: {
+          primary: '#10b981',
+          secondary: '#ffffff',
+        },
+      });
+
       // Remove sending flag after a short delay (will be replaced by real message from WebSocket)
       setTimeout(() => {
         setMessages(prevMessages =>
@@ -155,7 +232,19 @@ function ChatModal({ house, onClose, isDarkMode }) {
       console.error('Error sending message:', error);
       // Remove optimistic message on error
       setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempMessageId));
-      toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
+      toast.error('Failed to send message: ' + (error.message || 'Unknown error'), {
+        duration: 3000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+      });
     }
   };
 

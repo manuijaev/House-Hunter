@@ -225,6 +225,10 @@ export const djangoAPI = {
     return await makeApiCall('/auth/user/');
   },
 
+  logout: async () => {
+    return await makeApiCall('/auth/logout/', { method: 'POST' });
+  },
+
   getUsers: async () => {
     return await makeApiCall('/admin/users/');
   },
@@ -273,6 +277,13 @@ export const djangoAPI = {
 
   markMessagesRead: async (houseId) => {
     return await makeApiCall(`/houses/${houseId}/messages/mark-read/`, { method: 'POST' });
+  },
+
+  deleteConversation: async (houseId, tenantId) => {
+    return await makeApiCall(`/conversations/delete/`, {
+      method: 'POST',
+      body: JSON.stringify({ house_id: houseId, tenant_id: tenantId }),
+    });
   },
 
   // =============================

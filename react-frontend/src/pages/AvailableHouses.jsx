@@ -50,6 +50,24 @@ function AvailableHouses() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
+  // Helper function to check if house was posted within 24 hours
+  const isHouseNew = (house) => {
+    // Use updated_at for when the house became visible (approved), fallback to created_at
+    const dateToCheck = house?.updated_at || house?.created_at;
+    if (!dateToCheck) return false;
+
+    try {
+      const postDate = new Date(dateToCheck);
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+
+      return postDate > twentyFourHoursAgo;
+    } catch (error) {
+      console.error('Error parsing house date:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     fetchApprovedHouses();
   }, []);
@@ -138,7 +156,20 @@ function AvailableHouses() {
   };
 
   const handleChat = (house) => {
-    navigate('/login');
+    navigate('/login?mode=signup&userType=tenant');
+  };
+
+  // Override all house card interactions to redirect to tenant signup
+  const handleFavorite = (houseId, isFavorite) => {
+    navigate('/login?mode=signup&userType=tenant');
+  };
+
+  const handleQuickView = (house) => {
+    navigate('/login?mode=signup&userType=tenant');
+  };
+
+  const handleShare = (house) => {
+    navigate('/login?mode=signup&userType=tenant');
   };
 
   const handleBackToHome = () => {
@@ -151,7 +182,7 @@ function AvailableHouses() {
     affordableProperties: houses.filter(h => (h.monthlyRent || h.monthly_rent || 0) <= 30000).length,
     luxuryProperties: houses.filter(h => (h.monthlyRent || h.monthly_rent || 0) >= 80000).length,
     featuredProperties: houses.filter(h => h.isFeatured).length,
-    newProperties: houses.filter(h => h.isNew).length,
+    newProperties: houses.filter(h => isHouseNew(h)).length,
     averagePrice: houses.length > 0
       ? Math.round(houses.reduce((sum, house) => sum + (house.monthlyRent || house.monthly_rent || 0), 0) / houses.length)
       : 0
@@ -263,10 +294,10 @@ function AvailableHouses() {
                   <span className="stat-value">{analyticsData.totalProperties}</span>
                   <span className="stat-label">Total</span>
                 </div>
-                <div className="stat-item">
+                {/* <div className="stat-item">
                   <span className="stat-value">{analyticsData.featuredProperties}</span>
                   <span className="stat-label">Featured</span>
-                </div>
+                </div> */}
                 <div className="stat-item">
                   <span className="stat-value">{analyticsData.newProperties}</span>
                   <span className="stat-label">New Today</span>
@@ -308,9 +339,13 @@ function AvailableHouses() {
                       userType="tenant"
                       onPayment={handlePayment}
                       onChat={handleChat}
+                      onFavorite={handleFavorite}
+                      onQuickView={handleQuickView}
+                      onShare={handleShare}
                       isDarkMode={isDarkMode}
                       isFeatured={house.isFeatured}
                       isNew={house.isNew}
+                      isPaid={false}
                     />
                   </div>
                 ))}

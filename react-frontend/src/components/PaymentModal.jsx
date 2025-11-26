@@ -120,23 +120,31 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
   };
 
   return (
-    <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`}>
-      <div className={`payment-modal ${isDarkMode ? 'dark' : ''}`}>
-        <div className="modal-header">
-          <h2>
-            <MessageCircle size={24} style={{ marginRight: '8px' }} />
-            Unlock Chat Access
-          </h2>
-          <button
-            className="close-btn"
-            onClick={onClose}
-            disabled={loading}
-          >
-            <X size={24} />
-          </button>
+    <div className={`property-modal-overlay ${isDarkMode ? 'dark' : ''}`} onClick={onClose}>
+      <div className="property-modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Close Button */}
+        <button className="modal-close-btn" onClick={onClose} disabled={loading}>
+          <X size={24} />
+        </button>
+
+        {/* Payment Modal Header */}
+        <div className="modal-image-section">
+          <div className="modal-no-image">
+            <MessageCircle size={64} />
+            <span>Unlock Chat Access</span>
+          </div>
         </div>
 
-        <div className="modal-body">
+        {/* Details Section */}
+        <div className="modal-details-section">
+          <h2 className="modal-title">Payment Required</h2>
+
+          <div className="modal-description">
+            <p>Pay a small fee to unlock direct messaging with the landlord for this property.</p>
+          </div>
+
+          <div className="modal-contact-section">
+            <h3>Payment Details</h3>
           {!paymentStatus && (
             <>
               {/* Payment Info Section */}
@@ -378,6 +386,7 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
               <p>You can now message the landlord directly.</p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

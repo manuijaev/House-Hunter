@@ -14,6 +14,7 @@ urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register, name='register'),
     path('auth/login/', views.login, name='login'),
+    path('auth/logout/', views.logout, name='logout'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/user/', views.get_user, name='get_user'),
 
@@ -34,6 +35,7 @@ urlpatterns = [
     path('messages/<int:pk>/', views.MessageDetailView.as_view(), name='message-detail'),
     path('houses/<int:house_id>/messages/', views.get_house_messages, name='house-messages'),
     path('houses/<int:house_id>/messages/mark-read/', views.mark_messages_read, name='mark-messages-read'),
+    path('conversations/delete/', views.delete_conversation, name='delete-conversation'),
 
     # Payment endpoints
     path('payments/initiate/', views.initiate_payment, name='initiate-payment'),

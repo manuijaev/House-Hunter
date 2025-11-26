@@ -420,7 +420,7 @@ div.landing-page {
   align-items: stretch;
   gap: 2rem;
   margin-bottom: 3rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   color: #e0e0e0 !important; /* Light gray for visibility */
   width: 100%;
   flex-direction: row !important;

@@ -87,7 +87,8 @@ function HouseCard({
   isFeatured = false,
   showActions = true,
   showAdminActions = false,
-  animationDelay = 0
+  animationDelay = 0,
+  isPaid: propIsPaid // Allow overriding payment status
 }) {
   // Safety check for house object
   if (!house || typeof house !== 'object') {
@@ -107,7 +108,7 @@ function HouseCard({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
   const [isPaid, setIsPaid] = useState(() =>
-    localStorage.getItem(`paid_${house.id}`) === "true"
+    propIsPaid !== undefined ? propIsPaid : localStorage.getItem(`paid_${house.id}`) === "true"
   );
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
@@ -139,6 +140,12 @@ function HouseCard({
 
   // Check payment status
   useEffect(() => {
+    // If payment status is controlled by prop, don't override it
+    if (propIsPaid !== undefined) {
+      setIsPaid(propIsPaid);
+      return;
+    }
+
     const checkPaymentStatus = async () => {
       if (userType === 'tenant' && currentUser?.id && house?.id) {
         try {
@@ -176,11 +183,14 @@ function HouseCard({
 
     // Initial check
     checkPaymentStatus();
-  }, [userType, currentUser, house?.id]);
+  }, [userType, currentUser, house?.id, propIsPaid]);
 
   // Listen for payment completion events (WebSocket + DOM events)
   useEffect(() => {
     const handlePaymentCompleted = (data) => {
+      // If payment status is controlled by prop, don't update it
+      if (propIsPaid !== undefined) return;
+
       // Handle WebSocket message
       const paidHouseId = String(data.house_id);
       const currentHouseId = String(house?.id);
@@ -206,6 +216,9 @@ function HouseCard({
     };
 
     const handleDOMPaymentCompleted = (e) => {
+      // If payment status is controlled by prop, don't update it
+      if (propIsPaid !== undefined) return;
+
       // Handle DOM event (fallback)
       const paidHouseId = String(e.detail.houseId);
       const currentHouseId = String(house?.id);
@@ -356,8 +369,11 @@ function HouseCard({
   const handleFavoriteClick = useCallback((e) => {
     e.stopPropagation();
     if (!currentUser) {
-      // Redirect to login with favorite house ID
-      navigate(`/login?favoriteHouseId=${houseData?.id}`);
+      // Redirect to signup with tenant user type for tenant pages
+      const loginUrl = userType === 'tenant'
+        ? `/login?mode=signup&userType=tenant&favoriteHouseId=${houseData?.id}`
+        : `/login?favoriteHouseId=${houseData?.id}`;
+      navigate(loginUrl);
       toast.success('Please sign in to save favorites');
       return;
     }
@@ -368,7 +384,7 @@ function HouseCard({
         onFavorite(houseData.id, !isFavorite);
       }
     }
-  }, [houseData?.id, toggleFavorite, isFavorite, onFavorite, currentUser, navigate]);
+  }, [houseData?.id, toggleFavorite, isFavorite, onFavorite, currentUser, navigate, userType]);
 
   const handlePaymentClick = useCallback((e) => {
     e.stopPropagation();
@@ -406,7 +422,8 @@ function HouseCard({
 
     // Require authentication for viewing images
     if (!currentUser) {
-      navigate('/login');
+      const loginUrl = userType === 'tenant' ? '/login?mode=signup&userType=tenant' : '/login';
+      navigate(loginUrl);
       toast.info('Please sign in to view property images');
       return;
     }
@@ -421,8 +438,8 @@ function HouseCard({
     // For tenants, check authentication first
     if (userType === 'tenant') {
       if (!currentUser) {
-        // Redirect to login if not authenticated
-        navigate('/login');
+        // Redirect to signup with tenant user type
+        navigate('/login?mode=signup&userType=tenant');
         toast.info('Please sign in to view property details');
         return;
       }
@@ -465,8 +482,8 @@ function HouseCard({
     // For tenants, check if authenticated first
     if (userType === 'tenant') {
       if (!currentUser) {
-        // Redirect to login if not authenticated
-        navigate('/login');
+        // Redirect to signup with tenant user type
+        navigate('/login?mode=signup&userType=tenant');
         toast.info('Please sign in to view property details');
         return;
       }

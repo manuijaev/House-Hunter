@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { djangoAPI } from "../services/djangoAPI";
-import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Send, MessageCircle, Trash2 } from 'lucide-react';
 import './LandlordChats.css';
 
 function LandlordChats({ isDarkMode }) {
@@ -90,6 +90,32 @@ function LandlordChats({ isDarkMode }) {
           return new Date(b.lastTime) - new Date(a.lastTime);
         });
 
+        // Show toast notifications for unread messages on login/initial load (only once per session)
+        const totalUnreadCount = conversationsArray.reduce((total, conv) => total + conv.unreadCount, 0);
+        const unreadToastKey = `unread_toast_shown_${currentUser.id}`;
+        if (totalUnreadCount > 0 && !localStorage.getItem(unreadToastKey)) {
+          localStorage.setItem(unreadToastKey, 'true');
+          setTimeout(() => {
+            toast.success(`You have ${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`, {
+              duration: 5000,
+              style: {
+                background: isDarkMode ? '#1a1a1a' : '#ffffff',
+                color: isDarkMode ? '#ffffff' : '#1a1a1a',
+                border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                fontSize: '14px',
+                fontWeight: '500',
+                padding: '12px 16px',
+              },
+              iconTheme: {
+                primary: '#f59e0b',
+                secondary: '#ffffff',
+              },
+            });
+          }, 1000); // Small delay to ensure component is fully loaded
+        }
+
         setConversations(conversationsArray);
       } catch (error) {
         console.error('Error fetching conversations:', error);
@@ -121,8 +147,48 @@ function LandlordChats({ isDarkMode }) {
 
       websocketRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        // Only add message if it's for the current conversation and involves the current user
+
+        // Only process messages for this user
+        if (data.receiver_id === currentUser.id) {
+          // Prevent duplicate toasts using localStorage
+          const toastKey = `toast_${data.message_id}`;
+          if (localStorage.getItem(toastKey)) return;
+          localStorage.setItem(toastKey, 'shown');
+
+          // Clean up old toast keys after 30 seconds
+          setTimeout(() => {
+            localStorage.removeItem(toastKey);
+          }, 30000);
+
+          // Find the conversation to get the tenant name
+          const conversation = conversations.find(conv =>
+            conv.tenantId === data.sender_id && conv.houseId === parseInt(data.house_id || selectedConversation?.houseId)
+          );
+          const senderName = conversation ? conversation.tenantName : 'Tenant';
+
+          // Show toast notification for new messages from tenants
+          toast.success(`New message from ${senderName}`, {
+            duration: 4000,
+            style: {
+              background: isDarkMode ? '#1a1a1a' : '#ffffff',
+              color: isDarkMode ? '#ffffff' : '#1a1a1a',
+              border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+              fontSize: '14px',
+              fontWeight: '500',
+              padding: '12px 16px',
+            },
+            iconTheme: {
+              primary: '#8b5cf6',
+              secondary: '#ffffff',
+            },
+          });
+        }
+
+        // Only add message to UI if it's for the current conversation and involves the current user
         if ((data.sender_id === currentUser.id || data.receiver_id === currentUser.id) &&
+            selectedConversation &&
             (data.sender_id === selectedConversation.tenantId || data.receiver_id === selectedConversation.tenantId)) {
           setMessages(prev => {
             // Avoid duplicates
@@ -189,8 +255,93 @@ function LandlordChats({ isDarkMode }) {
     try {
       websocketRef.current.send(JSON.stringify(messageData));
       setNewMessage("");
+
+      // Show success toast for sent message
+      toast.success('Message sent successfully', {
+        duration: 2000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+        iconTheme: {
+          primary: '#10b981',
+          secondary: '#ffffff',
+        },
+      });
     } catch (error) {
       console.error('Error sending message:', error);
+      toast.error('Failed to send message', {
+        duration: 3000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+      });
+    }
+  };
+
+  const handleDeleteConversation = async (conversation) => {
+    if (!window.confirm(`Are you sure you want to delete the conversation with ${conversation.tenantName}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Call API to delete conversation
+      await djangoAPI.deleteConversation(conversation.houseId, conversation.tenantId);
+
+      // Remove from local state
+      setConversations(prev => prev.filter(conv => conv.id !== conversation.id));
+
+      // If this conversation was selected, close it
+      if (selectedConversation?.id === conversation.id) {
+        setSelectedConversation(null);
+        setShowMobileChat(false);
+      }
+
+      toast.success('Conversation deleted successfully', {
+        duration: 3000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+        iconTheme: {
+          primary: '#10b981',
+          secondary: '#ffffff',
+        },
+      });
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Failed to delete conversation', {
+        duration: 3000,
+        style: {
+          background: isDarkMode ? '#1a1a1a' : '#ffffff',
+          color: isDarkMode ? '#ffffff' : '#1a1a1a',
+          border: `1px solid ${isDarkMode ? '#333333' : '#e5e7eb'}`,
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+          fontSize: '14px',
+          fontWeight: '500',
+          padding: '12px 16px',
+        },
+      });
     }
   };
 
@@ -267,6 +418,18 @@ function LandlordChats({ isDarkMode }) {
                       {truncateMessage(conversation.lastMessage)}
                     </div>
                   </div>
+
+                  {/* Delete Button */}
+                  <button
+                    className="conversation-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteConversation(conversation);
+                    }}
+                    title="Delete conversation"
+                  >
+                    <Trash2 size={16} />
+                  </button>
 
                   {conversation.unreadCount > 0 && (
                     <div className="unread-badge">
