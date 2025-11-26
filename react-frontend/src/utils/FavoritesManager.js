@@ -7,7 +7,6 @@ export const useFavoritesManager = () => {
   const { currentUser } = useAuth();
   const [favorites, setFavorites] = useState([]);
   const [favoritesCount, setFavoritesCount] = useState(0);
-  const [wsConnection, setWsConnection] = useState(null);
 
   // Save favorites to localStorage
   const saveFavorites = useCallback((newFavorites) => {
@@ -129,57 +128,6 @@ export const useFavoritesManager = () => {
     return favorites.includes(houseId);
   }, [favorites]);
 
-  // Connect to WebSocket for real-time cleanup
-  const connectWebSocket = useCallback(() => {
-    if (!currentUser?.id) return;
-
-    try {
-      const ws = new WebSocket(`ws://localhost:8000/ws/favorites-cleanup/`);
-
-      ws.onopen = () => {
-        console.log('Favorites cleanup WebSocket connected');
-        setWsConnection(ws);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'houses_deleted' && data.house_ids) {
-            const deletedIds = data.house_ids;
-            const newFavorites = favorites.filter(id => !deletedIds.includes(id));
-
-            if (newFavorites.length !== favorites.length) {
-              const removedCount = favorites.length - newFavorites.length;
-              saveFavorites(newFavorites);
-              toast.info(`${removedCount} favorite${removedCount > 1 ? 's' : ''} removed (house${removedCount > 1 ? 's' : ''} deleted)`);
-            }
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('Favorites cleanup WebSocket disconnected');
-        setWsConnection(null);
-      };
-
-      ws.onerror = (error) => {
-        console.error('Favorites cleanup WebSocket error:', error);
-      };
-
-    } catch (error) {
-      console.error('Error connecting to favorites cleanup WebSocket:', error);
-    }
-  }, [currentUser?.id, favorites, saveFavorites]);
-
-  // Disconnect WebSocket
-  const disconnectWebSocket = useCallback(() => {
-    if (wsConnection) {
-      wsConnection.close();
-      setWsConnection(null);
-    }
-  }, [wsConnection]);
 
   // Load favorites when user changes
   useEffect(() => {
@@ -194,18 +142,6 @@ export const useFavoritesManager = () => {
     }
   }, [currentUser?.id, validateFavorites]);
 
-  // Manage WebSocket connection
-  useEffect(() => {
-    if (currentUser?.id) {
-      connectWebSocket();
-    } else {
-      disconnectWebSocket();
-    }
-
-    return () => {
-      disconnectWebSocket();
-    };
-  }, [currentUser?.id, connectWebSocket, disconnectWebSocket]);
 
   // Force cleanup of favorites (useful for fixing issues)
   const forceCleanup = useCallback(async () => {

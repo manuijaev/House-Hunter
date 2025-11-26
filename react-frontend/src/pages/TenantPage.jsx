@@ -109,11 +109,6 @@ function TenantPage() {
     };
 
     fetchHouses();
-
-    // Set up periodic refresh for house status updates (simplified approach)
-    const interval = setInterval(fetchHouses, 30000); // Refresh every 30 seconds
-
-    return () => clearInterval(interval);
   }, []);
 
   // Enhanced filtering and search
@@ -267,11 +262,6 @@ function TenantPage() {
 
     // Fetch initially
     fetchMessageCounts();
-
-    // Set up periodic fetching (every 30 seconds)
-    const interval = setInterval(fetchMessageCounts, 30000);
-
-    return () => clearInterval(interval);
   }, [currentUser, houses]);
 
 

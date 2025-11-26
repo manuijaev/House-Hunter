@@ -16,10 +16,10 @@ import os
 
 # M-Pesa API Configuration
 MPESA_CONFIG = {
-    'consumer_key': os.getenv('MPESA_CONSUMER_KEY') or 'qiNqsHj6rAXhn45oXWcao77JSwyh9IhMDS40xbJoNiymd2wf',
-    'consumer_secret': os.getenv('MPESA_CONSUMER_SECRET') or 'l2nulBjDWRAbYIR0ZsCwLfG59ZYayR85mNR2bGh9EMcJeD6IlxXnQQPfStqUcZGS',
+    'consumer_key': os.getenv('MPESA_CONSUMER_KEY') or 'R171HNv82XVQ5RASoRFUTI2fJTfhATqptAi5FGwiiLZaluq',
+    'consumer_secret': os.getenv('MPESA_CONSUMER_SECRET') or 'nGTfGfCbarOQOAO0EvXPQTcGZwEfDlv92ZnYp7N0GRGn20IaOyI27kuiGMd11G80',
     'shortcode': os.getenv('MPESA_SHORTCODE') or '174379',
-    'passkey': os.getenv('MPESA_PASSKEY') or 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919',
+    'passkey': os.getenv('MPESA_PASSKEY') or 'bfb279f9aa9bdbcf1f2b1e2102c12c2d7cf3813f4982f56d27c4178d0f82f8c1',
     'environment': os.getenv('MPESA_ENVIRONMENT', 'sandbox')
 }
 
@@ -86,7 +86,7 @@ def initiate_stk_push(phone_number, amount, account_reference, transaction_desc)
         'PartyA': phone_number,
         'PartyB': MPESA_CONFIG['shortcode'],
         'PhoneNumber': phone_number,
-        'CallBackURL': 'https://mydomain.com/mpesa-express-simulate/',
+        'CallBackURL': os.getenv('CALLBACK_URL', 'http://localhost:8000/api/payments/callback/'),
         'AccountReference': account_reference,
         'TransactionDesc': transaction_desc
     }
@@ -448,6 +448,38 @@ def mpesa_callback(request):
 
         payment.save()
 
+        # Broadcast payment status update via WebSocket
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        try:
+            channel_layer = get_channel_layer()
+
+            # Broadcast to specific payment WebSocket (existing)
+            async_to_sync(channel_layer.group_send)(
+                f'payment_{payment.id}',
+                {
+                    'type': 'payment_status_update',
+                    'status': payment.status
+                }
+            )
+
+            # Broadcast to user's payment completion group (new)
+            if payment.user:
+                async_to_sync(channel_layer.group_send)(
+                    f'user_payments_{payment.user.id}',
+                    {
+                        'type': 'payment_completed',
+                        'house_id': payment.house_id,
+                        'payment_id': payment.id
+                    }
+                )
+                print(f"Broadcasted payment completion to user {payment.user.id} for house {payment.house_id}")
+
+            print(f"Broadcasted payment status update for payment {payment.id}: {payment.status}")
+        except Exception as e:
+            print(f"Failed to broadcast payment status update: {e}")
+
         return Response({'message': 'Callback processed successfully'}, status=status.HTTP_200_OK)
 
     except Exception as e:
@@ -471,6 +503,38 @@ def simulate_payment_success(request):
         payment.mpesa_receipt_number = f'MOCK{payment.id}'
         payment.result_desc = 'Payment completed successfully (simulated)'
         payment.save()
+
+        # Broadcast payment status update via WebSocket
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        try:
+            channel_layer = get_channel_layer()
+
+            # Broadcast to specific payment WebSocket (existing)
+            async_to_sync(channel_layer.group_send)(
+                f'payment_{payment.id}',
+                {
+                    'type': 'payment_status_update',
+                    'status': 'completed'
+                }
+            )
+
+            # Broadcast to user's payment completion group (new)
+            if payment.user:
+                async_to_sync(channel_layer.group_send)(
+                    f'user_payments_{payment.user.id}',
+                    {
+                        'type': 'payment_completed',
+                        'house_id': payment.house_id,
+                        'payment_id': payment.id
+                    }
+                )
+                print(f"Broadcasted payment completion to user {payment.user.id} for house {payment.house_id}")
+
+            print(f"Broadcasted payment completion for payment {payment.id}")
+        except Exception as e:
+            print(f"Failed to broadcast payment status update: {e}")
 
         print(f"Simulated payment success for payment {payment_id}")
 

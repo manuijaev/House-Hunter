@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(response.user);
       setUserType(response.user.role || 'tenant');
 
+
       console.log('User registered successfully');
       return response;
     } catch (error) {
@@ -47,6 +48,7 @@ export const AuthProvider = ({ children }) => {
       // Update user state immediately after login
       setCurrentUser(response.user);
       setUserType(response.user.role || 'tenant');
+
 
       console.log('Login successful');
       return response;
@@ -114,7 +116,8 @@ export const AuthProvider = ({ children }) => {
       if (accessToken) {
         console.log('Found existing access token, fetching user data');
         try {
-          await fetchUserData();
+          const userData = await fetchUserData();
+
 
           // Check for pending redirects
           const pendingHouseId = localStorage.getItem('pendingHouseId');

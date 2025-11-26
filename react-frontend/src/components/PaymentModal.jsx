@@ -1,70 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Phone, Loader, CheckCircle, AlertCircle } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { djangoAPI } from '../services/djangoAPI';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect } from "react";
+import { initiatePayment } from "../services/djangoAPI";
+import { X, CreditCard, Phone, Loader, CheckCircle, AlertCircle, MessageCircle, Lock } from "lucide-react";
 import './PaymentModal.css';
 
 function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
-  const { currentUser } = useAuth();
-
-  console.log('PaymentModal COMPONENT RENDERED for house:', house?.title);
-  console.log('Props received:', { house: !!house, onClose: !!onClose, onPaymentSuccess: !!onPaymentSuccess, isDarkMode });
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState(null); // null, 'pending', 'completed', 'failed'
+  const [loading, setLoading] = useState(false);
   const [paymentId, setPaymentId] = useState(null);
+  const [polling, setPolling] = useState(false);
+  const [error, setError] = useState(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState(null); // 'success' when payment confirmed
 
-  // Auto-fill phone number if available
+  // Polling interval reference
+  const [pollInterval, setPollInterval] = useState(null);
+
+  // Cleanup intervals on unmount
   useEffect(() => {
-    if (currentUser?.phoneNumber) {
-      setPhoneNumber(currentUser.phoneNumber);
-    }
-  }, [currentUser]);
-
-  // Poll for payment status updates
-  useEffect(() => {
-    let intervalId;
-
-    if (paymentId && paymentStatus === 'pending') {
-      console.log('Starting payment status polling for payment_id:', paymentId);
-      intervalId = setInterval(async () => {
-        try {
-          console.log('Checking payment status...');
-          const payments = await djangoAPI.getUserPayments();
-          const currentPayment = payments.payments.find(p => p.id === paymentId);
-
-          if (currentPayment) {
-            console.log('Current payment status:', currentPayment.status);
-            if (currentPayment.status === 'completed') {
-              console.log('Payment completed! Calling handlePaymentSuccess');
-              setPaymentStatus('completed');
-              handlePaymentSuccess();
-              clearInterval(intervalId);
-            } else if (currentPayment.status === 'failed') {
-              console.log('Payment failed');
-              setPaymentStatus('failed');
-              toast.error('Payment failed. Please try again.');
-              clearInterval(intervalId);
-            } else {
-              console.log('Payment still pending');
-            }
-          } else {
-            console.log('Payment not found in response');
-          }
-        } catch (error) {
-          console.error('Error checking payment status:', error);
-        }
-      }, 3000); // Check every 3 seconds
-    }
-
     return () => {
-      if (intervalId) {
-        console.log('Clearing payment polling interval');
-        clearInterval(intervalId);
-      }
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [paymentId, paymentStatus]);
+  }, [pollInterval]);
+
+  const startPolling = (paymentId) => {
+    setPolling(true);
+
+    const interval = setInterval(async () => {
+      try {
+        // Check payment status by fetching user's payments
+        const response = await fetch('http://localhost:8000/api/payments/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          }
+        });
+
+        if (response.ok) {
+          const paymentsData = await response.json();
+          const currentPayment = paymentsData.payments.find(p => p.id === paymentId);
+
+          console.log("Polling payment status:", currentPayment);
+
+          if (currentPayment && currentPayment.status === 'completed') {
+            clearInterval(interval);
+            setPolling(false);
+
+            // Dispatch event so HouseCard unlocks immediately
+            window.dispatchEvent(
+              new CustomEvent("payment:completed", {
+                detail: { houseId: String(house.id) },
+              })
+            );
+
+            // Local update for safety
+            localStorage.setItem(`paid_${house.id}`, "true");
+
+            // Notify parent
+            onPaymentSuccess && onPaymentSuccess();
+
+            onClose();
+          }
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    }, 3000);
+
+    setPollInterval(interval);
+  };
 
   const validatePhoneNumber = (number) => {
     // Kenyan phone number validation (254XXXXXXXXX format)
@@ -72,114 +73,77 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
     return kenyaPhoneRegex.test(number);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    console.log('PAYMENT FORM SUBMITTED');
+  const handleStartPayment = async () => {
+    setLoading(true);
+    setError(null);
 
     if (!phoneNumber.trim()) {
-      console.log('No phone number entered');
-      toast.error('Please enter your phone number');
+      setError("Please enter your phone number");
+      setLoading(false);
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
-      console.log('Invalid phone number format:', phoneNumber);
-      toast.error('Please enter a valid Kenyan phone number (254XXXXXXXXX)');
+      setError("Please enter a valid Kenyan phone number (254XXXXXXXXX)");
+      setLoading(false);
       return;
     }
 
-    console.log('Phone number valid, initiating payment...');
-    setIsLoading(true);
-    setPaymentStatus('pending');
-
     try {
       const paymentData = {
+        house_id: house.id,
+        amount: 1, // Fixed amount for chat unlock (1 shilling)
         phone_number: phoneNumber,
-        amount: 1, // Fixed amount for testing
-        account_reference: `HOUSE_UNLOCK_${house.id}_${currentUser.id}`,
+        account_reference: `HOUSE_UNLOCK_${house.id}`,
         transaction_desc: `Unlock chat for ${house.title}`,
-        house_id: house.id
       };
 
-      console.log('Sending payment data:', paymentData);
-      const response = await djangoAPI.initiatePayment(paymentData);
-      console.log('Payment API response:', response);
+      const response = await initiatePayment(paymentData);
 
-      if (response.payment_id) {
-        console.log('Payment initiated successfully, payment_id:', response.payment_id);
-        setPaymentId(response.payment_id);
-        toast.success('STK Push sent! Please check your phone and enter M-Pesa PIN to complete payment.');
+      console.log("Payment initiation response:", response);
 
-        // For development: Automatically simulate payment success after 5 seconds
-        console.log('Development mode: Simulating payment success in 5 seconds...');
-        setTimeout(async () => {
-          try {
-            console.log('Calling simulate payment success...');
-            await djangoAPI.simulatePaymentSuccess(response.payment_id);
-            console.log('Payment simulation completed');
-          } catch (error) {
-            console.error('Payment simulation failed:', error);
-          }
-        }, 5000);
-      } else {
-        console.log('No payment_id in response');
-        throw new Error('Failed to initiate payment');
+      if (!response?.payment_id) {
+        throw new Error("Payment ID missing from API response");
       }
-    } catch (error) {
-      console.error('Payment initiation failed:', error);
-      setIsLoading(false);
-      setPaymentStatus(null);
-      toast.error('Failed to initiate payment. Please try again.');
-    }
-  };
 
-  const handlePaymentSuccess = () => {
-    console.log('Payment completed successfully for house:', house.title);
+      setPaymentId(response.payment_id);
 
-    // Show success toast
-    toast.success('Payment received! House chat unlocked successfully.');
+      // Start polling immediately
+      startPolling(response.payment_id);
 
-    // Call parent success handler (HouseCard will handle localStorage and UI updates)
-    if (onPaymentSuccess) {
-      onPaymentSuccess(house.id);
+    } catch (err) {
+      console.error("Payment error:", err);
+      setError("Failed to initiate payment. Try again.");
     }
 
-    // Close modal after a short delay
-    setTimeout(() => {
-      onClose();
-    }, 2000);
-  };
-
-  const handleClose = () => {
-    if (paymentStatus === 'pending') {
-      toast('Payment in progress. You can close this modal and check back later.', {
-        duration: 4000,
-      });
-    }
-    onClose();
+    setLoading(false);
   };
 
   return (
     <div className={`modal-overlay ${isDarkMode ? 'dark' : ''}`}>
       <div className={`payment-modal ${isDarkMode ? 'dark' : ''}`}>
         <div className="modal-header">
-          <h2>Unlock House Chat</h2>
+          <h2>
+            <MessageCircle size={24} style={{ marginRight: '8px' }} />
+            Unlock Chat Access
+          </h2>
           <button
             className="close-btn"
-            onClick={handleClose}
-            disabled={isLoading}
+            onClick={onClose}
+            disabled={loading}
           >
             <X size={24} />
           </button>
         </div>
 
         <div className="modal-body">
-          {paymentStatus === null && (
+          {!paymentStatus && (
             <>
+              {/* Payment Info Section */}
               <div className="payment-info">
                 <div className="house-info">
                   <h3>{house.title}</h3>
-                  <p>{house.location}</p>
+                  <p>Chat with landlord</p>
                 </div>
 
                 <div className="amount-info">
@@ -187,56 +151,112 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
                     <span className="currency">KES</span>
                     <span className="value">1</span>
                   </div>
-                  <p className="amount-label">Unlock Fee</p>
+                  <p className="amount-label">One-time fee</p>
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="payment-form">
-                <div className="form-group">
-                  <label htmlFor="phone">
-                    <Phone size={18} />
-                    M-Pesa Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="254XXXXXXXXX"
-                    required
-                    disabled={isLoading}
-                  />
-                  <small>Enter your M-Pesa registered phone number</small>
-                </div>
+              {/* Feature Benefits */}
+              <div style={{
+                background: isDarkMode ? '#2a2a2a' : '#f8f9fa',
+                padding: '16px',
+                borderRadius: '12px',
+                marginBottom: '24px'
+              }}>
+                <h4 style={{
+                  margin: '0 0 12px 0',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: isDarkMode ? '#e5e5e5' : '#1a1a1a'
+                }}>
+                  What you'll get:
+                </h4>
+                <ul style={{
+                  margin: '0',
+                  padding: '0 0 0 20px',
+                  color: isDarkMode ? '#ccc' : '#666',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
+                }}>
+                  <li>Direct messaging with the landlord</li>
+                  <li>Ask questions about the property</li>
+                  <li>Schedule viewings and negotiations</li>
+                  <li>24/7 access to property details</li>
+                </ul>
+              </div>
 
-                <button
-                  type="submit"
-                  className="pay-btn"
-                  disabled={isLoading || !phoneNumber.trim()}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader size={18} className="spinning" />
-                      Sending STK Push...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard size={18} />
-                      Pay & Unlock
-                    </>
-                  )}
-                </button>
-              </form>
+              {/* Phone Number Input */}
+              <div className="form-group">
+                <label htmlFor="phone">
+                  <Phone size={18} />
+                  M-Pesa Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="254XXXXXXXXX"
+                  required
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: `2px solid ${isDarkMode ? '#444' : '#e5e5e5'}`,
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    background: isDarkMode ? '#333' : 'white',
+                    color: isDarkMode ? '#e5e5e5' : '#1a1a1a',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                  onBlur={(e) => e.target.style.borderColor = isDarkMode ? '#444' : '#e5e5e5'}
+                />
+                <small style={{ color: isDarkMode ? '#ccc' : '#666' }}>
+                  Enter your M-Pesa registered phone number (254XXXXXXXXX)
+                </small>
+              </div>
+
+              {error && (
+                <div style={{
+                  background: '#fee',
+                  border: '1px solid #fcc',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '20px',
+                  color: '#c33'
+                }}>
+                  <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                  {error}
+                </div>
+              )}
+
+              <button
+                className="pay-btn"
+                onClick={handleStartPayment}
+                disabled={loading || !phoneNumber.trim()}
+              >
+                {loading ? (
+                  <>
+                    <Loader size={18} className="spinning" />
+                    Processing Payment...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard size={18} />
+                    Pay & Unlock Chat
+                  </>
+                )}
+              </button>
             </>
           )}
 
-          {paymentStatus === 'pending' && (
+          {paymentId && polling && (
             <div className="payment-pending">
               <div className="status-icon">
                 <Loader size={48} className="spinning" />
               </div>
               <h3>Payment in Progress</h3>
-              <p>STK Push sent to {phoneNumber}</p>
+              <p>M-Pesa STK Push sent to your phone</p>
               <p className="instructions">
                 Please check your phone and enter your M-Pesa PIN to complete the payment.
               </p>
@@ -245,36 +265,117 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
                 <div className="dot"></div>
                 <div className="dot"></div>
               </div>
+
+              {/* Development: Confirm Payment Button */}
+              <div className="confirm-payment-section">
+                <p className="confirm-note">Development Mode: Click below to simulate payment completion</p>
+                <button
+                  className="confirm-payment-btn"
+                  onClick={async () => {
+                    if (!paymentId) return;
+
+                    try {
+                      setLoading(true);
+                      console.log('Simulating payment for paymentId:', paymentId);
+
+                      // Call backend to simulate payment success
+                      const response = await fetch(`http://localhost:8000/api/payments/simulate-success/`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ payment_id: paymentId })
+                      });
+
+                      if (response.ok) {
+                        console.log('Simulate API call successful, starting verification polling...');
+
+                        // Wait 2 seconds before starting polling to ensure backend has updated
+                        setTimeout(() => {
+                          const checkInterval = setInterval(async () => {
+                            try {
+                              console.log('Polling for payment status...');
+                              const paymentsResponse = await fetch('http://localhost:8000/api/payments/', {
+                                headers: {
+                                  'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                                }
+                              });
+
+                              if (paymentsResponse.ok) {
+                                const paymentsData = await paymentsResponse.json();
+                                const currentPayment = paymentsData.payments.find(p => p.id === paymentId);
+
+                                console.log('Found payment:', currentPayment);
+                                console.log('Payment status:', currentPayment?.status);
+                                console.log('Checking if status === "completed":', currentPayment?.status === 'completed');
+
+                                if (currentPayment && currentPayment.status === 'completed') {
+                                  console.log('✅ Payment confirmed as completed! Showing success and unlocking house card.');
+                                  clearInterval(checkInterval);
+
+                                  // Show success state
+                                  setPaymentStatus('success');
+                                  setPolling(false);
+
+                                  // Dispatch event so HouseCard unlocks immediately
+                                  window.dispatchEvent(
+                                    new CustomEvent("payment:completed", {
+                                      detail: { houseId: String(house.id) },
+                                    })
+                                  );
+
+                                  // Update localStorage
+                                  localStorage.setItem(`paid_${house.id}`, "true");
+
+                                  // Notify parent
+                                  onPaymentSuccess && onPaymentSuccess();
+
+                                  // Close modal after showing success for 2 seconds
+                                  setTimeout(() => {
+                                    onClose();
+                                  }, 2000);
+                                }
+                              } else {
+                                console.error('Failed to fetch payments data');
+                              }
+                            } catch (error) {
+                              console.error('Error checking payment status:', error);
+                            }
+                          }, 2000); // Check every 2 seconds
+
+                          // Stop checking after 15 seconds
+                          setTimeout(() => {
+                            clearInterval(checkInterval);
+                            console.log('Polling timeout reached');
+                          }, 15000);
+                        }, 2000); // Wait 2 seconds before starting polling
+
+                      } else {
+                        console.error('Failed to simulate payment');
+                      }
+                    } catch (error) {
+                      console.error('Error simulating payment:', error);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading || !paymentId}
+                >
+                  <CheckCircle size={18} />
+                  Simulate Payment Success
+                </button>
+              </div>
             </div>
           )}
 
-          {paymentStatus === 'completed' && (
+          {paymentStatus === 'success' && (
             <div className="payment-success">
               <div className="status-icon success">
                 <CheckCircle size={48} />
               </div>
               <h3>Payment Successful!</h3>
-              <p>House chat has been unlocked.</p>
-              <p>You can now contact the landlord directly.</p>
-            </div>
-          )}
-
-          {paymentStatus === 'failed' && (
-            <div className="payment-failed">
-              <div className="status-icon failed">
-                <AlertCircle size={48} />
-              </div>
-              <h3>Payment Failed</h3>
-              <p>Please try again or contact support if the issue persists.</p>
-              <button
-                className="retry-btn"
-                onClick={() => {
-                  setPaymentStatus(null);
-                  setIsLoading(false);
-                }}
-              >
-                Try Again
-              </button>
+              <p>Chat access has been unlocked.</p>
+              <p>You can now message the landlord directly.</p>
             </div>
           )}
         </div>

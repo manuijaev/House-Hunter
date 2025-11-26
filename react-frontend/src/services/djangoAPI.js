@@ -307,3 +307,6 @@ export const djangoAPI = {
     return await makeApiCall(`/favorites/valid/?${params.toString()}`);
   },
 };
+
+// Named exports for convenience
+export const initiatePayment = djangoAPI.initiatePayment;

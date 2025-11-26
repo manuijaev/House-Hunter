@@ -106,7 +106,9 @@ function HouseCard({
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isVacant, setIsVacant] = useState(house?.isVacant ?? true);
-  const [isPaid, setIsPaid] = useState(false);
+  const [isPaid, setIsPaid] = useState(() =>
+    localStorage.getItem(`paid_${house.id}`) === "true"
+  );
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
@@ -137,16 +139,107 @@ function HouseCard({
 
   // Check payment status
   useEffect(() => {
-    if (userType === 'tenant' && currentUser?.id && house?.id) {
-      try {
-        const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.id}`) || '[]');
-        setIsPaid(paidHouses.includes(String(house.id)));
-      } catch (error) {
-        console.error('Error checking paid houses:', error);
-        setIsPaid(false);
+    const checkPaymentStatus = async () => {
+      if (userType === 'tenant' && currentUser?.id && house?.id) {
+        try {
+          // First check localStorage
+          const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser.id}`) || '[]');
+          const isPaidLocally = paidHouses.includes(String(house.id));
+
+          // If not paid locally, check backend for completed payments
+          if (!isPaidLocally) {
+            try {
+              const paymentsResponse = await djangoAPI.getUserPayments();
+              const completedPayments = paymentsResponse.payments.filter(p => p.status === 'completed');
+              const isPaidOnBackend = completedPayments.some(p => String(p.house_id) === String(house.id));
+
+              if (isPaidOnBackend) {
+                // Update localStorage to reflect backend state
+                const updatedPaidHouses = [...paidHouses, String(house.id)];
+                localStorage.setItem(`paid_houses_${currentUser.id}`, JSON.stringify(updatedPaidHouses));
+                setIsPaid(true);
+                console.log('Updated localStorage for house:', house.id, 'payment found on backend');
+                return;
+              }
+            } catch (backendError) {
+              console.error('Error checking backend payment status:', backendError);
+            }
+          }
+
+          setIsPaid(isPaidLocally);
+        } catch (error) {
+          console.error('Error checking paid houses:', error);
+          setIsPaid(false);
+        }
       }
-    }
+    };
+
+    // Initial check
+    checkPaymentStatus();
   }, [userType, currentUser, house?.id]);
+
+  // Listen for payment completion events (WebSocket + DOM events)
+  useEffect(() => {
+    const handlePaymentCompleted = (data) => {
+      // Handle WebSocket message
+      const paidHouseId = String(data.house_id);
+      const currentHouseId = String(house?.id);
+
+      console.log("🌐 WEBSOCKET PAYMENT COMPLETED:", {
+        wsHouseId: paidHouseId,
+        currentHouseId: currentHouseId,
+        houseTitle: house?.title,
+        comparison: currentHouseId === paidHouseId
+      });
+
+      if (currentHouseId === paidHouseId) {
+        console.log("✅ WEBSOCKET PAYMENT MATCHED! Updating house card:", paidHouseId, "Title:", house?.title);
+
+        // Update UI immediately
+        setIsPaid(true);
+
+        // Persist locally
+        localStorage.setItem(`paid_${paidHouseId}`, "true");
+
+        console.log("✅ House card updated via WebSocket - isPaid set to true, localStorage updated");
+      }
+    };
+
+    const handleDOMPaymentCompleted = (e) => {
+      // Handle DOM event (fallback)
+      const paidHouseId = String(e.detail.houseId);
+      const currentHouseId = String(house?.id);
+
+      console.log("🔥 DOM PAYMENT EVENT RECEIVED:", {
+        eventHouseId: paidHouseId,
+        currentHouseId: currentHouseId,
+        houseTitle: house?.title,
+        comparison: currentHouseId === paidHouseId
+      });
+
+      if (currentHouseId === paidHouseId) {
+        console.log("✅ DOM PAYMENT EVENT MATCHED! Updating house card:", paidHouseId, "Title:", house?.title);
+
+        // Update UI immediately
+        setIsPaid(true);
+
+        // Persist locally
+        localStorage.setItem(`paid_${paidHouseId}`, "true");
+
+        console.log("✅ House card updated via DOM event - isPaid set to true, localStorage updated");
+      }
+    };
+
+    console.log("🎧 Setting up payment listeners for house:", house?.id, "Title:", house?.title);
+
+    // Add DOM event listener for payment completion
+    window.addEventListener("payment:completed", handleDOMPaymentCompleted);
+
+    return () => {
+      console.log("🔇 Removing payment listeners for house:", house?.id);
+      window.removeEventListener("payment:completed", handleDOMPaymentCompleted);
+    };
+  }, [house?.id, house?.title]);
 
   // Get favorite status from the favorites manager
   const isFavorite = isFavorited(String(house?.id || ''));
@@ -281,35 +374,45 @@ function HouseCard({
     e.stopPropagation();
     console.log('UNLOCK BUTTON CLICKED! Setting showPaymentModal to true');
     console.log('Current state - showPaymentModal:', showPaymentModal, 'userType:', userType);
-    setShowPaymentModal(true);
-  }, [showPaymentModal, userType]);
 
-  const handlePaymentSuccess = useCallback((houseId) => {
-    // Update local payment status - ONLY after confirmed payment from API
+    // Require authentication for payment
+    if (!currentUser) {
+      navigate('/login');
+      toast.info('Please sign in to unlock house chat');
+      return;
+    }
+
+    setShowPaymentModal(true);
+  }, [showPaymentModal, userType, currentUser, navigate]);
+
+  const handlePaymentSuccess = useCallback(() => {
+    console.log("Payment success handler triggered");
+
     setIsPaid(true);
 
-    // Update localStorage to persist payment status
-    const paidHouses = JSON.parse(localStorage.getItem(`paid_houses_${currentUser?.id}`) || '[]');
-    if (!paidHouses.includes(String(houseId))) {
-      paidHouses.push(String(houseId));
-      localStorage.setItem(`paid_houses_${currentUser?.id}`, JSON.stringify(paidHouses));
-    }
+    localStorage.setItem(`paid_${houseData.id}`, "true");
 
-    // Show success toast
-    toast.success('Payment confirmed! House chat unlocked successfully.');
+    // Close modal properly
+    setShowPaymentModal(false);
 
-    // Trigger any parent component updates
-    if (onPayment) {
-      onPayment(houseData);
-    }
-  }, [houseData, onPayment, currentUser?.id]);
+    // Bubble event upward (if parent listens)
+    onPayment && onPayment(houseData.id);
+  }, [houseData, onPayment]);
 
   
 
   const handleZoomClick = useCallback((e) => {
     e.stopPropagation();
+
+    // Require authentication for viewing images
+    if (!currentUser) {
+      navigate('/login');
+      toast.info('Please sign in to view property images');
+      return;
+    }
+
     setShowImageModal(true);
-  }, []);
+  }, [currentUser, navigate]);
 
   const handleQuickView = useCallback((e) => {
     e.preventDefault();
@@ -436,7 +539,7 @@ function HouseCard({
       console.error('HouseCard: failed to change house status', error);
       toast.error('Failed to change house status: ' + (error?.message || ''));
     }
-  }, [houseData?.id]);
+  }, [house?.id]);
 
   // Enhanced amenity rendering with better icons
   const renderAmenities = useMemo(() => {
