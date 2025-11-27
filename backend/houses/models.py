@@ -139,6 +139,10 @@ class House(models.Model):
     contact_email = models.EmailField(blank=True)
     exact_location = models.CharField(max_length=300, blank=True)
 
+    # Precise location coordinates
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Latitude coordinate for precise location")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, help_text="Longitude coordinate for precise location")
+
     # View tracking
     view_count = models.PositiveIntegerField(default=0, help_text="Number of times this house has been viewed by tenants")
 

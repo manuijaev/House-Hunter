@@ -419,13 +419,26 @@ function HouseCard({
     // Require authentication for viewing images
     if (!currentUser) {
       const loginUrl = userType === 'tenant' ? '/login?mode=signup&userType=tenant' : '/login';
-      navigate(loginUrl);
       toast.info('Please sign in to view property images');
       return;
     }
 
     setShowImageModal(true);
   }, [currentUser, navigate]);
+
+  const handlePreciseLocationClick = useCallback((e) => {
+    e.stopPropagation();
+
+    // Check if coordinates are available
+    if (!house.latitude || !house.longitude) {
+      toast.error('Precise location coordinates are not available for this property');
+      return;
+    }
+
+    // Open Google Maps with the coordinates
+    const googleMapsUrl = `https://www.google.com/maps?q=${house.latitude},${house.longitude}`;
+    window.open(googleMapsUrl, '_blank');
+  }, [house]);
 
   const handleQuickView = useCallback((e) => {
     e.preventDefault();
@@ -696,6 +709,18 @@ function HouseCard({
                 <MapPin size={14} />
                 <span>{houseData.location}</span>
               </div>
+
+              {/* Precise Location button */}
+              {(house.latitude && house.longitude) && (
+                <button
+                  className="precise-location-btn"
+                  onClick={handlePreciseLocationClick}
+                  title="View precise location on Google Maps"
+                >
+                  <MapPin size={14} />
+                  <span>Precise Location</span>
+                </button>
+              )}
 
               {/* Favorite button */}
               <button
