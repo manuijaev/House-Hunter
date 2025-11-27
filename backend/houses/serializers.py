@@ -16,8 +16,6 @@ class HouseSerializer(serializers.ModelSerializer):
     landlordUid = serializers.CharField(source='landlord_uid', required=False, allow_blank=True)
     landlordEmail = serializers.EmailField(source='landlord_email', required=False, allow_blank=True)
     views = serializers.IntegerField(source='view_count', required=False, read_only=True)
-    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
-    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
 
     class Meta:
         model = House
@@ -26,7 +24,7 @@ class HouseSerializer(serializers.ModelSerializer):
             'monthlyRent', 'deposit', 'availableDate',
             'images', 'amenities', 'landlord', 'landlordName', 'displayName', 'landlordUsername', 'landlordId', 'landlordUid', 'landlordEmail',
             'isVacant', 'approval_status', 'pendingReason', 'created_at', 'updated_at',
-            'contactPhone', 'contactEmail', 'views', 'latitude', 'longitude'
+            'contactPhone', 'contactEmail', 'views'
         ]
         read_only_fields = [
             'id', 'landlord',
@@ -127,8 +125,6 @@ class HouseSerializer(serializers.ModelSerializer):
             'location': ['location'],
             'exact_location': ['exact_location', 'location'],  # Allow location to set exact_location
             'size': ['size'],
-            'latitude': ['latitude'],
-            'longitude': ['longitude'],
         }
 
         for model_key, candidates in alt_inputs.items():

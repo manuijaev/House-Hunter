@@ -186,7 +186,7 @@ Let's start by telling me which area you're interested in!`,
         {
           id: Date.now(),
           type: 'bot',
-          content: `👋 Hello! I'm your AI House Finder Assistant.`,
+          content: `Hello! I'm your AI House Finder Assistant.`,
           timestamp: new Date().toISOString()
         },
         {

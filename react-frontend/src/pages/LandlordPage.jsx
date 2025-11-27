@@ -299,12 +299,14 @@ function LandlordDashboard() {
       setHouses(prev => prev.map(h => String(h.id) === String(houseId) ? {
         ...h,
         ...updated,
-        // Ensure proper field mapping for display, using form data if API response doesn't include it
-        monthlyRent: updated.monthly_rent || updated.monthlyRent || updates.monthlyRent,
-        availableDate: updated.available_date || updated.availableDate || updates.availableDate,
-        contactPhone: updated.contact_phone || updated.contactPhone || updates.contactPhone,
-        contactEmail: updated.contact_email || updated.contactEmail || updates.contactEmail,
-        displayName: updated.landlord_name || updated.displayName || updates.displayName
+        // Ensure proper field mapping for display, using form data as primary source
+        monthlyRent: updates.monthlyRent,
+        availableDate: updates.availableDate,
+        contactPhone: updates.contactPhone,
+        contactEmail: updates.contactEmail,
+        displayName: updates.displayName,
+        // Ensure approval status is set to pending after edit
+        approval_status: 'pending'
       } : h));
 
       toast.success('✨ Property updated successfully!', {

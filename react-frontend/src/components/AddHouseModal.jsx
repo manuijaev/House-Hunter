@@ -61,12 +61,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
   const [uploadingImages, setUploadingImages] = useState([]);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [activeAmenityCategory, setActiveAmenityCategory] = useState('all');
-  const [latitude, setLatitude] = useState(null);
-  const [longitude, setLongitude] = useState(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
   const fileInputRef = useRef(null);
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
 
   // Initialize form data
   useEffect(() => {
@@ -102,8 +97,6 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
 
       setFormData(newFormData);
       setSelectedAmenities(house.amenities || []);
-      setLatitude(house.latitude || null);
-      setLongitude(house.longitude || null);
     } else {
       // Reset form for new house - auto-populate with current user info
       setFormData({
@@ -121,111 +114,9 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
         amenities: []
       });
       setSelectedAmenities([]);
-      setLatitude(null);
-      setLongitude(null);
     }
   }, [house, currentUser]);
 
-  // Load Google Maps API
-  useEffect(() => {
-    if (!window.google && !mapLoaded) {
-      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-      if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {
-        console.warn('Google Maps API key not set. Please set VITE_GOOGLE_MAPS_API_KEY in your .env file with a valid Google Maps API key.');
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        console.log('Google Maps API loaded successfully');
-        setMapLoaded(true);
-      };
-      script.onerror = () => {
-        console.error('Failed to load Google Maps API');
-      };
-      document.head.appendChild(script);
-    } else if (window.google) {
-      setMapLoaded(true);
-    }
-  }, [mapLoaded]);
-
-  // Initialize map when component mounts and Google Maps is loaded
-  useEffect(() => {
-    if (mapLoaded && mapRef.current && !window.google.maps.Map.prototype.mapInstance) {
-      console.log('Initializing Google Maps...');
-
-      try {
-        const defaultLocation = { lat: -1.2864, lng: 36.8172 }; // Nairobi coordinates
-
-        const map = new window.google.maps.Map(mapRef.current, {
-          zoom: 12,
-          center: latitude && longitude ? { lat: latitude, lng: longitude } : defaultLocation,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-        });
-
-        console.log('Google Maps initialized successfully');
-
-        // Add marker if coordinates exist
-        if (latitude && longitude) {
-          const marker = new window.google.maps.Marker({
-            position: { lat: latitude, lng: longitude },
-            map: map,
-            draggable: true,
-          });
-          markerRef.current = marker;
-
-          // Update coordinates when marker is dragged
-          marker.addListener('dragend', (event) => {
-            const newLat = event.latLng.lat();
-            const newLng = event.latLng.lng();
-            setLatitude(newLat);
-            setLongitude(newLng);
-          });
-        }
-
-        // Add click listener to place marker
-        map.addListener('click', (event) => {
-          const clickedLat = event.latLng.lat();
-          const clickedLng = event.latLng.lng();
-
-          // Remove existing marker
-          if (markerRef.current) {
-            markerRef.current.setMap(null);
-          }
-
-          // Create new marker
-          const marker = new window.google.maps.Marker({
-            position: { lat: clickedLat, lng: clickedLng },
-            map: map,
-            draggable: true,
-          });
-          markerRef.current = marker;
-
-          // Set coordinates
-          setLatitude(clickedLat);
-          setLongitude(clickedLng);
-
-          // Update coordinates when marker is dragged
-          marker.addListener('dragend', (dragEvent) => {
-            const newLat = dragEvent.latLng.lat();
-            const newLng = dragEvent.latLng.lng();
-            setLatitude(newLat);
-            setLongitude(newLng);
-          });
-        });
-
-        // Mark map as initialized
-        window.google.maps.Map.prototype.mapInstance = map;
-      } catch (error) {
-        console.error('Error initializing Google Maps:', error);
-      }
-    }
-  }, [mapLoaded, latitude, longitude]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -354,9 +245,7 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
         contact_phone: formData.contactPhone,
         contact_email: formData.contactEmail,
         landlord_name: formData.displayName,
-        amenities: selectedAmenities,
-        latitude: latitude,
-        longitude: longitude
+        amenities: selectedAmenities
       };
 
       await onSave(houseData);
@@ -482,40 +371,6 @@ function AddHouseModal({ house, onClose, onSave, isDarkMode, currentUser }) {
             </div>
           </div>
 
-          {/* Precise Location Section */}
-          <div className="form-section dynamic-card">
-            <div className="section-header">
-              <MapPin size={24} className="section-icon" />
-              <h3>Precise Location</h3>
-            </div>
-
-            <div className="location-section">
-              <p className="location-description">
-                Click on the map to set the exact location of your property. This will help tenants navigate to your property.
-              </p>
-
-              <div className="map-container">
-                {!mapLoaded ? (
-                  <div className="map-loading">
-                    <div className="spinner"></div>
-                    <p>Loading Google Maps...</p>
-                  </div>
-                ) : (
-                  <div
-                    ref={mapRef}
-                    className="google-map"
-                    style={{ height: '400px', width: '100%', borderRadius: '12px' }}
-                  />
-                )}
-              </div>
-
-              {(latitude && longitude) && (
-                <div className="coordinates-display">
-                  <p><strong>Coordinates:</strong> {latitude.toFixed(6)}, {longitude.toFixed(6)}</p>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Amenities Section */}
           <div className="form-section dynamic-card">
