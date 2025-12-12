@@ -1099,6 +1099,150 @@ div.landing-page {
   }
 }
 
+@media (max-width: 360px) {
+  .landing-header {
+    padding: 0.75rem;
+  }
+
+  .header-content {
+    padding: 0 0.5rem;
+  }
+
+  .header-logo {
+    width: 35px;
+    height: 35px;
+  }
+
+  .brand-text h1 {
+    font-size: 1.25rem;
+  }
+
+  .brand-tagline {
+    font-size: 0.7rem;
+  }
+
+  .desktop-nav {
+    display: none;
+  }
+
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  .hero-section {
+    padding: 0.75rem;
+    min-height: 80vh;
+  }
+
+  .hero-title {
+    font-size: 1.75rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1.1rem;
+  }
+
+  .hero-stats {
+    gap: 0.75rem;
+    flex-direction: column;
+  }
+
+  .hero-stat {
+    flex: none;
+    min-width: auto;
+    max-width: none;
+    padding: 1rem;
+  }
+
+  .stat-number {
+    font-size: 1.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+  }
+
+  .hero-search {
+    padding: 1.5rem;
+  }
+
+  .search-header h3 {
+    font-size: 1.25rem;
+  }
+
+  .search-controls {
+    gap: 0.75rem;
+  }
+
+  .search-box {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .search-input {
+    font-size: 0.9rem;
+  }
+
+  .section-container {
+    padding: 0 0.75rem;
+  }
+
+  .section-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .section-header h2 {
+    font-size: 2rem;
+  }
+
+  .properties-stats {
+    gap: 1rem;
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+  }
+
+  .houses-grid {
+    gap: 1rem;
+    padding: 0.75rem;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .feature-card {
+    padding: 1.5rem 1rem;
+  }
+
+  .feature-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .feature-card h3 {
+    font-size: 1.25rem;
+  }
+
+  .final-cta-section {
+    padding: 3rem 0.75rem;
+  }
+
+  .final-cta-section .cta-container {
+    padding: 2rem;
+  }
+
+  .cta-card h3 {
+    font-size: 1.75rem;
+  }
+
+  .cta-buttons {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
 /* Enhanced Scrollbar - Scoped to Landing Page */
 .landing-page ::-webkit-scrollbar {
   width: 8px;

@@ -397,3 +397,69 @@
     font-size: 14px;
   }
 }
+
+@media (max-width: 360px) {
+  .chat-modal-container {
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .chat-modal-header {
+    padding: 12px;
+  }
+
+  .chat-modal-title h3 {
+    font-size: 14px;
+  }
+
+  .chat-info .house-info {
+    font-size: 11px;
+  }
+
+  .chat-messages {
+    padding: 12px;
+    max-height: calc(100vh - 100px);
+    gap: 12px;
+  }
+
+  .chat-input {
+    padding: 12px;
+  }
+
+  .chat-input input {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .send-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .message {
+    gap: 8px;
+    max-width: 98%;
+  }
+
+  .message-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .message-content {
+    padding: 8px 12px;
+    border-radius: 16px;
+  }
+
+  .message-text {
+    font-size: 13px;
+  }
+
+  .message-time {
+    font-size: 10px;
+  }
+
+  .close-btn {
+    padding: 2px;
+  }
+}

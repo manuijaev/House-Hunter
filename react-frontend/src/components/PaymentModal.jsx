@@ -10,6 +10,7 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
   const [error, setError] = useState(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [paymentStatus, setPaymentStatus] = useState(null); // 'success' when payment confirmed
+  const [isServiceUnavailable, setIsServiceUnavailable] = useState(false);
 
   // Polling interval reference
   const [pollInterval, setPollInterval] = useState(null);
@@ -132,7 +133,24 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
 
     } catch (err) {
       console.error("Payment error:", err);
-      setError("Failed to initiate payment. Try again.");
+
+      // Enhanced error handling for different error types
+      if (err.message.includes('503') || err.message.includes('Service Unavailable')) {
+        setError("Payment service is temporarily unavailable. This usually resolves quickly. Please try again in a few moments.");
+        setIsServiceUnavailable(true);
+      } else if (err.message.includes('500') || err.message.includes('Internal Server Error')) {
+        setError("Server error occurred. Please try again later or contact support if the issue persists.");
+        setIsServiceUnavailable(false);
+      } else if (err.message.includes('Network') || err.message.includes('fetch')) {
+        setError("Network connection issue. Please check your internet connection and try again.");
+        setIsServiceUnavailable(false);
+      } else if (err.message.includes('Payment ID missing')) {
+        setError("Payment service returned an invalid response. Please try again.");
+        setIsServiceUnavailable(false);
+      } else {
+        setError(`Payment failed: ${err.message}`);
+        setIsServiceUnavailable(false);
+      }
     }
 
     setLoading(false);
@@ -254,6 +272,30 @@ function PaymentModal({ house, onClose, onPaymentSuccess, isDarkMode }) {
                 }}>
                   <AlertCircle size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
                   {error}
+                  {isServiceUnavailable && (
+                    <div style={{ marginTop: '12px' }}>
+                      <button
+                        onClick={() => {
+                          setError(null);
+                          setIsServiceUnavailable(false);
+                          handleStartPayment();
+                        }}
+                        disabled={loading}
+                        style={{
+                          background: '#007bff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '8px 16px',
+                          fontSize: '14px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          opacity: loading ? 0.6 : 1
+                        }}
+                      >
+                        {loading ? 'Retrying...' : 'Retry Payment'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

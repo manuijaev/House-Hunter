@@ -637,10 +637,10 @@ function LandlordDashboard() {
                       : 'Start by adding your first property to get started'
                     }
                   </p>
-                  <button className="add-first-house-btn dynamic-btn accent-btn" onClick={() => setShowAddModal(true)}>
+                  {/* <button className="add-first-house-btn dynamic-btn accent-btn" onClick={() => setShowAddModal(true)}>
                     <Plus size={20} />
                     <span>Add Your First Property</span>
-                  </button>
+                  </button> */}
                 </div>
               </div>
             )}

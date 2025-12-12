@@ -30,7 +30,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-secret-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,boastful-diagonally-almeta.ngrok-free.dev').split(',') if h]
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,boastful-diagonally-almeta.ngrok-free.dev,house-hunter-ehq3.vercel.app,house-hunter-kqnj.onrender.com').split(',') if h]
 
 # Add Render host automatically
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -126,7 +126,8 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in development
 # Production CORS settings
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = [
-        "https://your-react-app.vercel.app",  # Your frontend URL
+        "https://house-hunter-ehq3.vercel.app",  # Your frontend URL
+        "https://house-hunter-kqnj.onrender.com",  # Your backend URL for testing
         "http://localhost:3000",  # For local development
         "http://127.0.0.1:3000",
     ]

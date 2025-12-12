@@ -416,21 +416,21 @@ function AdminPage() {
             </button>
 
             <div className="action-group">
-              <button
+              {/* <button
                 className="analytics-btn dynamic-btn secondary-btn"
                 onClick={() => setActiveTab('analytics')}
               >
                 <TrendingUp size={20} />
                 <span>Analytics</span>
-              </button>
+              </button> */}
 
-              <button
+              {/* <button
                 className="users-btn dynamic-btn primary-btn"
                 onClick={() => setActiveTab('users')}
               >
                 <Users size={20} />
                 <span>Users</span>
-              </button>
+              </button> */}
             </div>
 
             <div className="dropdown-container">
